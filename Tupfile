@@ -1,0 +1,5 @@
+.gitignore
+CFLAGS += -Wall @(CFLAGS)
+
+: foreach src/*.cpp |> @(CC) $(CFLAGS) -c %f -o %o |> %B.o
+: *.o |> @(CC) $(CFLAGS) %f -o %o -lSDL2 |> fsim
