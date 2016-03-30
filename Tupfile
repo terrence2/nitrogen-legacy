@@ -1,5 +1,10 @@
 .gitignore
 CFLAGS += -Wall @(CFLAGS)
+CFLAGS += `pkg-config --cflags SDL2_image`
+CFLAGS += `pkg-config --cflags SDL2_ttf`
+
+LIBS += `pkg-config --libs SDL2_image`
+LIBS += `pkg-config --libs SDL2_ttf`
 
 : foreach src/*.cpp |> @(CC) $(CFLAGS) -c %f -o %o |> %B.o
-: *.o |> @(CC) $(CFLAGS) %f -o %o -lSDL2 |> fsim
+: *.o |> @(CC) $(CFLAGS) %f -o %o $(LIBS) |> fsim@(EXT)
