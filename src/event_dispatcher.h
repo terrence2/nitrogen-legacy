@@ -10,4 +10,28 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#pragma once
 
+#include <functional>
+#include <unordered_map>
+#include <vector>
+
+namespace glit {
+
+class EventDispatcher
+{
+    using EventType = std::string;
+    using CallbackType = std::function<void()>;
+    using CallbacksType = std::vector<CallbackType>;
+    using ValueType = std::pair<EventType, CallbacksType>;
+    using RegistryType = std::unordered_map<EventType, CallbacksType>;
+    RegistryType events;
+
+  public:
+    EventDispatcher() {}
+    bool hasEventNamed(std::string event) const;
+    void observe(std::string event, CallbackType func);
+    void notify(std::string event) const;
+};
+
+} // namespace glit

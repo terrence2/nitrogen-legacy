@@ -1,10 +1,8 @@
 .gitignore
-CFLAGS += -Wall @(CFLAGS)
-CFLAGS += `pkg-config --cflags SDL2_image`
-CFLAGS += `pkg-config --cflags SDL2_ttf`
+CFLAGS += -Wall -std=c++11 @(CFLAGS)
+CFLAGS += `pkg-config --cflags glfw3`
 
-LIBS += `pkg-config --libs SDL2_image`
-LIBS += `pkg-config --libs SDL2_ttf`
+LIBS += `pkg-config --libs glfw3` -lGLESv2
 
 : foreach src/*.cpp |> @(CC) $(CFLAGS) -c %f -o %o |> %B.o
 : *.o |> @(CC) $(CFLAGS) %f -o %o $(LIBS) |> fsim@(EXT)

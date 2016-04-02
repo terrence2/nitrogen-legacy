@@ -10,34 +10,96 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+#include <stdexcept>
+#include <iostream>
+
 #include <stdio.h>
-#include <SDL2/SDL.h>
 
 #ifdef __EMSCRIPTEN__
 #  include <emscripten.h>
 #endif
 
-#include "utility.h"
+#include "bindings.h"
+#include "shader.h"
+#include "window.h"
 
-int main() {
-    float r = mult(2.0f, 4.0f);
-    if (r != 8.0f)
-        return 1;
 
-    printf("fsim starting\n");
-    SDL_Init(SDL_INIT_VIDEO);
+// Emscripten is getting its callbacks from the browsers refresh driver, so
+// does not have enough context to pass us an argument to the callback.
+static glit::Window gWindow;
 
-    SDL_Window *window;
-    SDL_Renderer *renderer;
-    SDL_CreateWindowAndRenderer(256, 256, 0, &window, &renderer);
+void
+do_loop()
+{
+    glClearColor(255, 0, 255, 255);
+    glClear(GL_COLOR_BUFFER_BIT);
+    gWindow.swap();
+}
 
-    SDL_Surface *screen = SDL_CreateRGBSurface(0, 256, 256, 8, 0, 0, 0, 0);
+int
+do_main()
+{
+    glit::EventDispatcher dispatcher;
+    dispatcher.observe("-quit", [](){gWindow.quit();});
 
-    if (SDL_MUSTLOCK(screen)) SDL_LockSurface(screen);
-    if (SDL_MUSTLOCK(screen)) SDL_UnlockSurface(screen);
-    SDL_RenderPresent(renderer);
+    glit::InputBindings menuBindings(dispatcher, "MenuBindings");
+    menuBindings.bindNamedKey("quit", GLFW_KEY_ESCAPE);
 
-    SDL_Quit();
+    //glit::SceneGraph scene;
+
+    gWindow.init();
+    gWindow.setCurrentBindings(menuBindings);
+    //gWindow.setSceneGraph(scene);
+
+
+    glit::VertexShader vsTri(
+        "attribute vec4 a_position;              \n"
+        "attribute vec4 a_color;                 \n"
+        "uniform float u_time;                   \n"
+        "varying vec4 v_color;                   \n"
+        "void main()                             \n"
+        "{                                       \n"
+        "    float sz = sin(u_time);             \n"
+        "    float cz = cos(u_time);             \n"
+        "    mat4 rot = mat4(                    \n"
+        "     cz, -sz, 0,  0,                    \n"
+        "     sz,  cz, 0,  0,                    \n"
+        "     0,   0,  1,  0,                    \n"
+        "     0,   0,  0,  1                     \n"
+        "    );                                  \n"
+        "    gl_Position = a_position * rot;     \n"
+        "    v_color = a_color;                  \n"
+        "}                                       \n"
+        );
+    glit::FragmentShader fsTri(
+        "precision mediump float;                \n"
+        "varying vec4 v_color;                   \n"
+        "void main()                             \n"
+        "{                                       \n"
+        "    gl_FragColor = v_color;             \n"
+        "}                                       \n"
+        );
+
+    while (!gWindow.isDone())
+        do_loop();
+
     return 0;
+}
+
+int main()
+{
+#if __EMSCRIPTEN__
+    try {
+        do_main();
+    } catch(std::runtime_error& sre) {
+        // Empscripten does not handle exceptions at the top level, so be sure
+        // to print them out manually.
+        std::cerr << "Runtime error: " << sre.what() << std::endl;
+    }
+#else
+    // Otherwise, let the platform catch it.
+    do_main();
+#endif // __EMSCRIPTEN__
 }
 

@@ -1,0 +1,1 @@
+../build-emscripten-debug/fsim.js
