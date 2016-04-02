@@ -81,15 +81,19 @@ do_main()
         "}                                       \n"
         );
 
+#ifndef __EMSCRIPTEN__
     while (!gWindow.isDone())
         do_loop();
+#else
+    emscripten_set_main_loop(do_loop, 60, 1);
+#endif
 
     return 0;
 }
 
 int main()
 {
-#if __EMSCRIPTEN__
+#ifdef __EMSCRIPTEN__
     try {
         do_main();
     } catch(std::runtime_error& sre) {
