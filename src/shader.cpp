@@ -10,17 +10,18 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#include "shader.h"
 
+#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
 
-#include <GLES2/gl2.h>
-
-#include "shader.h"
+#define GLFW_INCLUDE_ES2
+#include <GLFW/glfw3.h>
 
 template <GLenum Type>
-glit::Shader<Type>::Shader(const char* source)
+glit::BaseShader<Type>::BaseShader(const char* source)
   : id(glCreateShader(Type))
 {
     glShaderSource(id, 1, &source, nullptr);
@@ -37,33 +38,48 @@ glit::Shader<Type>::Shader(const char* source)
         }
         std::unique_ptr<GLchar> info(new GLchar[log_len]);
         glGetShaderInfoLog(id, log_len, nullptr, info.get());
+        glDeleteShader(id);
         throw std::runtime_error(std::string("shader compilation failed:\n") +
                                  std::string(info.release()));
     }
 }
 
 template <GLenum Type>
-glit::Shader<Type>::~Shader()
+glit::BaseShader<Type>::~BaseShader()
 {
     glDeleteShader(id);
 }
 
-template class glit::Shader<GL_FRAGMENT_SHADER>;
-template class glit::Shader<GL_VERTEX_SHADER>;
+template class glit::BaseShader<GL_FRAGMENT_SHADER>;
+template class glit::BaseShader<GL_VERTEX_SHADER>;
 
-glit::Program::Program(const VertexShader& vs, const FragmentShader& fs)
-  : id(glCreateProgram())
+glit::Program::Program(const VertexShader& vs, const FragmentShader& fs,
+                       std::vector<Input> inputVec /* = {} */)
+  : vertexShader(vs), fragmentShader(fs), id(glCreateProgram()),
+    inputs(inputVec)
 {
     glAttachShader(id, vs.id);
     glAttachShader(id, fs.id);
+    glLinkProgram(id);
+    GLint linked = 0;
+    glGetProgramiv(id, GL_LINK_STATUS, &linked);
+    if (!linked) {
+        GLint log_len = 0;
+        glGetProgramiv(id, GL_INFO_LOG_LENGTH, &log_len);
+        if (!log_len) {
+            glDeleteProgram(id);
+            throw std::runtime_error("program link failure with no output");
+        }
+        std::unique_ptr<GLchar> info(new GLchar[log_len]);
+        glDeleteProgram(id);
+        throw std::runtime_error(std::string("shader program link failed:\n") +
+                                 std::string(info.release()));
+    }
+}
 
-    /*
-glBindAttribLocation(g_context.prog_id, Context::Position_loc, "a_position");
-glBindAttribLocation(g_context.prog_id, Context::Color_loc, "a_color");
-glLinkProgram(g_context.prog_id);
-GLint linked = 0;
-glGetProgramiv(g_context.prog_id, GL_LINK_STATUS, &linked);
-assert(linked);
-g_context.u_time_loc = glGetUniformLocation(g_context.prog_id, "u_time");
-*/
+glit::Program::~Program()
+{
+    glDetachShader(id, fragmentShader.id);
+    glDetachShader(id, vertexShader.id);
+    glDeleteProgram(id);
 }

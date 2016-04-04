@@ -1,5 +1,5 @@
 .gitignore
-CFLAGS += -Wall -std=c++11 @(CFLAGS)
+CFLAGS += -Wall -std=c++14 -Ideps/tue/include @(CFLAGS)
 CFLAGS += `pkg-config --cflags glfw3`
 
 LIBS += `pkg-config --libs glfw3` -lGLESv2

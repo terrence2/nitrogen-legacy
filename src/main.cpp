@@ -13,6 +13,7 @@
 
 #include <stdexcept>
 #include <iostream>
+#include <type_traits>
 
 #include <stdio.h>
 
@@ -20,8 +21,10 @@
 #  include <emscripten.h>
 #endif
 
+#include "polygon.h"
 #include "bindings.h"
 #include "shader.h"
+#include "vertex.h"
 #include "window.h"
 
 
@@ -29,13 +32,29 @@
 // does not have enough context to pass us an argument to the callback.
 static glit::Window gWindow;
 
+static glit::Program* gProgram;
+static glit::VertexBuffer* gTris;
+
 void
 do_loop()
 {
     glClearColor(255, 0, 255, 255);
     glClear(GL_COLOR_BUFFER_BIT);
+
+    gProgram->run(*gTris, float(glfwGetTime()));
+
     gWindow.swap();
 }
+
+struct MyVertex {
+    float a_position[3];
+    uint8_t a_color[4];
+
+    static void describe(std::vector<glit::VertexAttrib>& attribs) {
+        attribs.push_back(MakeVertexAttrib(MyVertex, a_position, false));
+        attribs.push_back(MakeVertexAttrib(MyVertex, a_color, true));
+    }
+};
 
 int
 do_main()
@@ -52,34 +71,59 @@ do_main()
     gWindow.setCurrentBindings(menuBindings);
     //gWindow.setSceneGraph(scene);
 
+    auto MyVertexDesc = glit::VertexDescriptor::fromType<MyVertex>();
+    glit::VertexBuffer tris(MyVertexDesc);
+    const MyVertex verts[] {
+        { { 0.f,  .5f, 0.f},   {255,   0,   0, 255} },
+        { {-.5f, -.5f, 0.f},   {  0, 255,   0, 255} },
+        { { .5f, -.5f, 0.f},   {  0,   0, 255, 255} }
+    };
+    tris.buffer(sizeof(verts), (void*)verts);
+    std::cout << "sizeof verts: " << sizeof(verts) << std::endl;
 
     glit::VertexShader vsTri(
-        "attribute vec4 a_position;              \n"
-        "attribute vec4 a_color;                 \n"
-        "uniform float u_time;                   \n"
-        "varying vec4 v_color;                   \n"
-        "void main()                             \n"
-        "{                                       \n"
-        "    float sz = sin(u_time);             \n"
-        "    float cz = cos(u_time);             \n"
-        "    mat4 rot = mat4(                    \n"
-        "     cz, -sz, 0,  0,                    \n"
-        "     sz,  cz, 0,  0,                    \n"
-        "     0,   0,  1,  0,                    \n"
-        "     0,   0,  0,  1                     \n"
-        "    );                                  \n"
-        "    gl_Position = a_position * rot;     \n"
-        "    v_color = a_color;                  \n"
-        "}                                       \n"
+            R"SHADER(
+            precision highp float;
+            uniform float u_time;
+            attribute vec4 a_position;
+            attribute vec4 a_color;
+            varying vec4 v_color;
+            void main()
+            {
+                float sz = sin(u_time);
+                float cz = cos(u_time);
+                mat4 rot = mat4(
+                    cz, -sz, 0,  0,
+                    sz,  cz, 0,  0,
+                    0,   0,  1,  0,
+                    0,   0,  0,  1
+                );
+                gl_Position = a_position * rot;
+                v_color = a_color;
+            }
+            )SHADER",
+            MyVertexDesc
+            /*,
+            VaryingVec("v_color")
+            */
         );
     glit::FragmentShader fsTri(
-        "precision mediump float;                \n"
-        "varying vec4 v_color;                   \n"
-        "void main()                             \n"
-        "{                                       \n"
-        "    gl_FragColor = v_color;             \n"
-        "}                                       \n"
+            R"SHADER(
+            precision highp float;
+            varying vec4 v_color;
+            void main() {
+                gl_FragColor = v_color;
+            }
+            )SHADER"
+            /*,
+            VaryingVec("v_color")
+            */
         );
+    glit::Program::Input input("u_time", GL_FLOAT);
+    glit::Program prog(vsTri, fsTri, {input});
+
+    gProgram = &prog;
+    gTris = &tris;
 
 #ifndef __EMSCRIPTEN__
     while (!gWindow.isDone())
