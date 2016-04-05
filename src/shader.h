@@ -12,10 +12,14 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
+#include <iostream>
 #include <string>
 
 #define GLFW_INCLUDE_ES2
 #include <GLFW/glfw3.h>
+
+#include <glm/mat4x4.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include "vertex.h"
 
@@ -54,7 +58,29 @@ using FragmentShader = BaseShader<GL_FRAGMENT_SHADER>;
 class Program
 {
   public:
-    using Input = std::pair<const char*, GLenum>;
+    class Input {
+        const char* name_;
+        GLenum type_;
+        uint8_t cols_;
+        uint8_t rows_;
+      public:
+        Input(const char* name, GLenum type, uint8_t cols = 1, uint8_t rows = 1)
+          : name_(name),
+            type_(type),
+            cols_(cols),
+            rows_(rows)
+        {}
+        const char* name() const { return name_; }
+        GLenum gl_enum() const { return type_; }
+        bool isScalar() const { return cols_ == 1 && rows_ == 1; }
+        bool isVector() const { return cols_ != 1 && rows_ == 1; }
+        bool isMatrix() const { return cols_ != 1 && rows_ != 1; }
+    };
+    template <typename T>
+    static Input MakeInput(const char* name) {
+        return Input(name, MapTypeToTraits<T>::gl_enum,
+                     MapTypeToTraits<T>::cols, MapTypeToTraits<T>::rows);
+    }
 
     Program(const VertexShader& vs, const FragmentShader& fs,
             std::vector<Input> inputVec = {});
@@ -72,35 +98,48 @@ class Program
         bindUniforms<0>(args...);
         enableVertexAttribs();
 
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glDrawArrays(vb.primitiveKind(), 0, vb.numVerts());
 
         disableVertexAttribs();
     }
 
     template <size_t N, typename Fst, typename ...Args>
     void bindUniforms(Fst&& fst, Args&&... args) {
-        GLenum actual = MapTypeToGLEnum<
-            typename std::remove_reference<Fst>::type>::value;
-        if (inputs[N].second != actual) {
+        GLenum actual_enum = MapTypeToTraits<
+            typename std::remove_reference<Fst>::type>::gl_enum;
+        if (inputs[N].gl_enum() != actual_enum) {
             throw std::runtime_error(std::string("type mismatch at input ") +
                                      std::to_string(N));
         }
-        GLint index = glGetUniformLocation(id, inputs[N].first);
+        GLint index = glGetUniformLocation(id, inputs[N].name());
         if (index == -1) {
-            throw std::runtime_error(std::string("unknown uniform ") +
-                                     inputs[N].first);
+            // The shader compiler might optimize out a perfectly reasonable
+            // input. This gets particularly annoying when trying to debug a
+            // shader. Instead of erroring out, we just ignore the missing input
+            // and print a warning.
+            std::cerr << "trying to bind to an unknown uniform " <<
+                         inputs[N].name() << std::endl;
+        } else {
+            bindUniform(index, fst);
         }
-        bindUniform(index, fst);
         bindUniforms<N + 1>(args...);
     }
     template <size_t N>
     void bindUniforms() {}
     void bindUniform(GLint index, float f) { glUniform1f(index, f); }
     void bindUniform(GLint index, int i) { glUniform1i(index, i); }
+    void bindUniform(GLint index, const glm::mat4& m) {
+        glUniformMatrix4fv(index, 1, GL_FALSE, glm::value_ptr(m));
+    }
 
     void enableVertexAttribs() {
         for (auto& attr : vertexShader.vertexDesc.attributes()) {
             GLint index = glGetAttribLocation(id, attr.name());
+            if (index == -1) {
+                throw std::runtime_error(std::string(
+                            "failed to enable vertex attribute: " +
+                            std::string(attr.name())));
+            }
             attr.enable(index);
         }
     }

@@ -15,14 +15,19 @@
 #include <iostream>
 #include <type_traits>
 
+#include <math.h>
 #include <stdio.h>
 
 #ifdef __EMSCRIPTEN__
 #  include <emscripten.h>
 #endif
 
-#include "polygon.h"
+#include <glm/gtc/constants.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/mat4x4.hpp>
+
 #include "bindings.h"
+#include "icosphere.h"
 #include "shader.h"
 #include "vertex.h"
 #include "window.h"
@@ -38,23 +43,32 @@ static glit::VertexBuffer* gTris;
 void
 do_loop()
 {
-    glClearColor(255, 0, 255, 255);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClearColor(0, 0, 0, 255);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    gProgram->run(*gTris, float(glfwGetTime()));
+    auto projection = glm::perspective(glm::pi<float>() * 0.25f, 4.0f / 3.0f,
+                                       0.1f, 100.f);
+    auto view = glm::mat4(1.0f);
+    auto model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -10.0f));
+    model = glm::rotate(model, float(glfwGetTime()), glm::vec3(0.0f, 1.0f, 0.0f));
+    auto modelviewproj = projection * view * model;
+
+    gProgram->run(*gTris, modelviewproj);
 
     gWindow.swap();
 }
 
+/*
 struct MyVertex {
-    float a_position[3];
-    uint8_t a_color[4];
+    float aPosition[3];
+    uint8_t aColor[4];
 
     static void describe(std::vector<glit::VertexAttrib>& attribs) {
-        attribs.push_back(MakeVertexAttrib(MyVertex, a_position, false));
-        attribs.push_back(MakeVertexAttrib(MyVertex, a_color, true));
+        attribs.push_back(MakeVertexAttrib(MyVertex, aPosition, false));
+        attribs.push_back(MakeVertexAttrib(MyVertex, aColor, true));
     }
 };
+*/
 
 int
 do_main()
@@ -71,22 +85,57 @@ do_main()
     gWindow.setCurrentBindings(menuBindings);
     //gWindow.setSceneGraph(scene);
 
+    glit::IcoSphere sphere(0);
+    //glit::VertexBuffer sphereBuf = sphere.uploadPoints();
+    auto SphereVertexDesc = glit::VertexDescriptor::fromType<
+                                    glit::IcoSphere::Vertex>();
+    glit::VertexBuffer sphereGpuVerts(SphereVertexDesc);
+    sphereGpuVerts.upload(GL_LINE_STRIP, sphere.verts);
+    glit::VertexShader vsSphere(
+            R"SHADER(
+            precision highp float;
+            uniform mat4 uModelViewProj;
+            attribute vec3 aPosition;
+            varying vec4 vColor;
+            void main()
+            {
+                gl_Position = uModelViewProj * vec4(aPosition, 1.0);
+                vColor = vec4(255, 255, 255, 255);
+            }
+            )SHADER",
+            SphereVertexDesc);
+    glit::FragmentShader fsSphere(
+            R"SHADER(
+            precision highp float;
+            varying vec4 vColor;
+            void main() {
+                gl_FragColor = vColor;
+            }
+            )SHADER"
+        );
+    glit::Program progSphere(vsSphere, fsSphere, {
+                glit::Program::MakeInput<glm::mat4>("uModelViewProj"),
+            });
+
+    gProgram = &progSphere;
+    gTris = &sphereGpuVerts;
+
+#if 0
     auto MyVertexDesc = glit::VertexDescriptor::fromType<MyVertex>();
     glit::VertexBuffer tris(MyVertexDesc);
-    const MyVertex verts[] {
+    const std::vector<MyVertex> triVerts{
         { { 0.f,  .5f, 0.f},   {255,   0,   0, 255} },
         { {-.5f, -.5f, 0.f},   {  0, 255,   0, 255} },
         { { .5f, -.5f, 0.f},   {  0,   0, 255, 255} }
     };
-    tris.buffer(sizeof(verts), (void*)verts);
-    std::cout << "sizeof verts: " << sizeof(verts) << std::endl;
+    tris.upload(GL_TRIANGLES, triVerts);
 
     glit::VertexShader vsTri(
             R"SHADER(
             precision highp float;
             uniform float u_time;
-            attribute vec4 a_position;
-            attribute vec4 a_color;
+            attribute vec4 aPosition;
+            attribute vec4 aColor;
             varying vec4 v_color;
             void main()
             {
@@ -98,8 +147,8 @@ do_main()
                     0,   0,  1,  0,
                     0,   0,  0,  1
                 );
-                gl_Position = a_position * rot;
-                v_color = a_color;
+                gl_Position = aPosition * rot;
+                v_color = aColor;
             }
             )SHADER",
             MyVertexDesc
@@ -119,11 +168,11 @@ do_main()
             VaryingVec("v_color")
             */
         );
-    glit::Program::Input input("u_time", GL_FLOAT);
-    glit::Program prog(vsTri, fsTri, {input});
+    glit::Program prog(vsTri, fsTri, {glit::Program::MakeInput<float>("u_time")});
 
     gProgram = &prog;
     gTris = &tris;
+#endif
 
 #ifndef __EMSCRIPTEN__
     while (!gWindow.isDone())

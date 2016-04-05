@@ -31,11 +31,16 @@ class Window
     } state;
     InputBindings* bindings;
     GLFWwindow* window;
+    int width_;
+    int height_;
 
   public:
     Window();
     ~Window();
     void init();
+
+    int width() const { return width_; }
+    int height() const { return height_; }
 
     void quit() { state = State::Done; }
     bool isDone() const { return state == State::Done; }
@@ -47,6 +52,8 @@ class Window
     static void errorCallback(int error, const char* description);
     static void keyCallback(GLFWwindow* window, int key, int scancode,
                             int action, int mods);
+    static void windowCloseCallback(GLFWwindow* window);
+    static void windowSizeCallback(GLFWwindow* window, int width, int height);
 };
 
 } // namespace glit

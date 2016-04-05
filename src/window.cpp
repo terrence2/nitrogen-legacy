@@ -38,13 +38,25 @@ glit::Window::init()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
 
-    window = glfwCreateWindow(640, 480, "AFS", NULL, NULL);
+    // Use "windowed fullscreen" by getting the current settings.
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+    glfwWindowHint(GLFW_RED_BITS, mode->redBits);
+    glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
+    glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
+    glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
+    window = glfwCreateWindow(mode->width, mode->height, "AFS", monitor, NULL);
     if (!window)
         throw std::runtime_error("glfwCreateWindow failed");
+
+    // Query the actual size we got.
+    glfwGetWindowSize(window, &width_, &height_);
 
     // Listen for events.
     glfwSetWindowUserPointer(window, this);
     glfwSetKeyCallback(window, keyCallback);
+    glfwSetWindowCloseCallback(window, windowCloseCallback);
+    glfwSetWindowSizeCallback(window, windowSizeCallback);
 
     glfwMakeContextCurrent(window);
 
@@ -90,4 +102,22 @@ glit::Window::keyCallback(GLFWwindow* window, int key, int scancode,
     Window* self = fromGLFW(window);
     printf("key is: %d %d %d %d\n", key, scancode, action, mods);
     self->bindings->dispatchKeyEvent(key, scancode, action, mods);
+}
+
+/* static */ void
+glit::Window::windowCloseCallback(GLFWwindow* window)
+{
+    Window* self = fromGLFW(window);
+    self->state = State::Done;
+}
+
+/* static */ void
+glit::Window::windowSizeCallback(GLFWwindow* window, int width, int height)
+{
+    Window* self = fromGLFW(window);
+    std::cout << "Window size changed to: " << width << " x " << height <<
+                 std::endl;
+    self->width_ = width;
+    self->height_ = height;
+    glViewport(0, 0, width, height);
 }

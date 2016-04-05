@@ -10,25 +10,27 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#pragma once
+
+#include <vector>
+
 #include "vertex.h"
 
-void
-glit::VertexAttrib::enable(GLint index) const
+namespace glit {
+
+class IcoSphere
 {
-    if (index_ != -1)
-        throw std::runtime_error("double-enable of attribute");
+  public:
+    struct Vertex {
+        float aPosition[3];
+        static void describe(std::vector<VertexAttrib>& attribs) {
+            attribs.push_back(MakeVertexAttrib(Vertex, aPosition, false));
+        }
+    };
 
-    index_ = index;
-    glVertexAttribPointer(index_, size_, type_, normalized_, stride_, (void*)offset_);
-    glEnableVertexAttribArray(index);
-}
+    IcoSphere(int iterations);
 
-void
-glit::VertexAttrib::disable() const
-{
-    if (index_ == -1)
-        throw std::runtime_error("double disable of attribute");
+    std::vector<Vertex> verts;
+};
 
-    glDisableVertexAttribArray(GLuint(index_));
-    index_ = -1;
-}
+} // namespace glit

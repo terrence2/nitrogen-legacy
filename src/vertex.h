@@ -12,11 +12,14 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
+#include <iostream>
 #include <stdexcept>
 #include <vector>
 
 #define GLFW_INCLUDE_ES2
 #include <GLFW/glfw3.h>
+
+#include <glm/mat4x4.hpp>
 
 namespace glit {
 
@@ -28,13 +31,17 @@ ArrayLength(T (&aArr)[N])
 }
 
 // Turn a C++ type into its matching GLenum.
-template <typename T> struct MapTypeToGLEnum {};
+template <typename T> struct MapTypeToTraits{};
 #define MAKE_MAP(D) \
-    D(float, GL_FLOAT) \
-    D(uint8_t, GL_UNSIGNED_BYTE)
-#define EXPAND_MAP_ITEM(ty, en) \
-    template <> struct MapTypeToGLEnum<ty> { \
-        static const GLenum value = en; \
+    D(float, GL_FLOAT, 1, 1) \
+    D(uint8_t, GL_UNSIGNED_BYTE, 1, 1) \
+    D(glm::mat4, GL_FLOAT, 4, 4)
+#define EXPAND_MAP_ITEM(ty, en, rows_, cols_) \
+    template <> struct MapTypeToTraits<ty> { \
+        using type = ty; \
+        static const GLenum gl_enum = en; \
+        static const uint8_t rows = rows_; \
+        static const uint8_t cols = cols_; \
     };
 MAKE_MAP(EXPAND_MAP_ITEM)
 #undef EXPAND_MAP_ITEM
@@ -113,11 +120,11 @@ class VertexAttrib
     glit::VertexAttrib( \
         #attrname, \
         std::extent<decltype(attrname)>::value, \
-        glit::MapTypeToGLEnum< \
+        glit::MapTypeToTraits< \
                 std::remove_extent< \
                     decltype(attrname) \
                 >::type \
-            >::value, \
+            >::gl_enum, \
         (normalized), \
         sizeof(cls), \
         offsetof(cls, attrname))
@@ -150,18 +157,43 @@ class VertexBuffer
 {
     GLuint id;
     const VertexDescriptor& vertexDesc_;
+    GLenum primitiveKind_;
+    size_t numVerts_;
 
     VertexBuffer(const VertexBuffer&) = delete;
     VertexBuffer(VertexBuffer&&) = delete;
 
   public:
-    VertexBuffer(const VertexDescriptor& desc);
-    ~VertexBuffer();
+    VertexBuffer(const VertexDescriptor& desc)
+      : id(0), vertexDesc_(desc), primitiveKind_(GL_POINTS), numVerts_(-1)
+    {
+        glGenBuffers(1, &id);
+    }
+    ~VertexBuffer() {
+        glDeleteBuffers(1, &id);
+    }
 
     const VertexDescriptor& vertexDesc() const { return vertexDesc_; }
+    GLenum primitiveKind() const { return primitiveKind_; }
+    size_t numVerts() const { return numVerts_; }
 
-    void bind() const;
-    void buffer(size_t size, void* data);
+    void bind() const {
+        if (numVerts_ == size_t(-1))
+            throw std::runtime_error("no vertex data uploaded");
+        glBindBuffer(GL_ARRAY_BUFFER, id);
+    }
+
+    template <typename VertexType>
+    void upload(GLenum kind, const std::vector<VertexType>& verts) {
+        if (vertexDesc_ != VertexDescriptor::fromType<VertexType>())
+            throw std::runtime_error("attempting to upload into wrong buffer type");
+        primitiveKind_ = kind;
+        numVerts_ = verts.size();
+        glBindBuffer(GL_ARRAY_BUFFER, id);
+        glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(VertexType),
+                     &verts[0], GL_STATIC_DRAW);
+        std::cout << "uploaded " << verts.size() << " verts" << std::endl;
+    }
 };
 
 } // namespace glit
