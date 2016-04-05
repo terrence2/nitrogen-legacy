@@ -14,6 +14,8 @@
 
 #include <vector>
 
+#include <glm/vec3.hpp>
+
 #include "vertex.h"
 
 namespace glit {
@@ -22,9 +24,9 @@ class IcoSphere
 {
   public:
     struct Vertex {
-        float aPosition[3];
+        glm::vec3 aPosition;
         static void describe(std::vector<VertexAttrib>& attribs) {
-            attribs.push_back(MakeVertexAttrib(Vertex, aPosition, false));
+            attribs.push_back(MakeGLMVertexAttrib(Vertex, aPosition, false));
         }
     };
 

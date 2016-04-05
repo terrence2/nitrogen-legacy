@@ -35,13 +35,15 @@ template <typename T> struct MapTypeToTraits{};
 #define MAKE_MAP(D) \
     D(float, GL_FLOAT, 1, 1) \
     D(uint8_t, GL_UNSIGNED_BYTE, 1, 1) \
+    D(glm::vec3, GL_FLOAT, 3, 1) \
     D(glm::mat4, GL_FLOAT, 4, 4)
 #define EXPAND_MAP_ITEM(ty, en, rows_, cols_) \
     template <> struct MapTypeToTraits<ty> { \
         using type = ty; \
-        static const GLenum gl_enum = en; \
-        static const uint8_t rows = rows_; \
-        static const uint8_t cols = cols_; \
+        static const GLenum gl_enum = (en); \
+        static const uint8_t rows = (rows_); \
+        static const uint8_t cols = (cols_); \
+        static const uint8_t extent = (rows_) * (cols_); \
     };
 MAKE_MAP(EXPAND_MAP_ITEM)
 #undef EXPAND_MAP_ITEM
@@ -125,6 +127,15 @@ class VertexAttrib
                     decltype(attrname) \
                 >::type \
             >::gl_enum, \
+        (normalized), \
+        sizeof(cls), \
+        offsetof(cls, attrname))
+
+#define MakeGLMVertexAttrib(cls, attrname, normalized) \
+    glit::VertexAttrib( \
+        #attrname, \
+        glit::MapTypeToTraits<decltype(attrname)>::extent, \
+        glit::MapTypeToTraits<decltype(attrname)>::gl_enum, \
         (normalized), \
         sizeof(cls), \
         offsetof(cls, attrname))
