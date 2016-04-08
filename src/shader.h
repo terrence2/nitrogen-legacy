@@ -14,6 +14,7 @@
 
 #include <iostream>
 #include <string>
+#include <vector>
 
 #define GLFW_INCLUDE_ES2
 #include <GLFW/glfw3.h>
@@ -25,17 +26,43 @@
 
 namespace glit {
 
+class UniformDesc {
+    const char* name_;
+    GLenum type_;
+    uint8_t cols_;
+    uint8_t rows_;
+  public:
+    UniformDesc(const char* name, GLenum type, uint8_t cols = 1, uint8_t rows = 1)
+      : name_(name),
+        type_(type),
+        cols_(cols),
+        rows_(rows)
+    {}
+    const char* name() const { return name_; }
+    GLenum gl_enum() const { return type_; }
+    bool isScalar() const { return cols_ == 1 && rows_ == 1; }
+    bool isVector() const { return cols_ != 1 && rows_ == 1; }
+    bool isMatrix() const { return cols_ != 1 && rows_ != 1; }
+};
+
 template <GLenum Type>
 class BaseShader
 {
     friend class Program;
-    const GLuint id;
+    GLuint id;
 
     BaseShader(const BaseShader&) = delete;
-    BaseShader(BaseShader&& other) = delete;
+
+    /*
+  protected:
+    using TypeNamePair = std::pair<std::string, std::string>;
+    using TypeNamePairs = std::vector<TypeNamePair>;
+    TypeNamePairs findQualifiedTypes(const char* source, const std::string& qualifier);
+    */
 
   public:
     BaseShader(const char* source);
+    BaseShader(BaseShader&& other);
     ~BaseShader();
 };
 
@@ -44,12 +71,13 @@ class VertexShader : public BaseShader<GL_VERTEX_SHADER>
     using Base = BaseShader<GL_VERTEX_SHADER>;
 
     friend class Program;
-    const VertexDescriptor& vertexDesc;
+    const VertexDescriptor vertexDesc;
+
+    VertexShader(const VertexShader&) = delete;
 
   public:
-    VertexShader(const char* source, const VertexDescriptor& desc)
-      : Base(source), vertexDesc(desc)
-    {}
+    VertexShader(const char* source, const VertexDescriptor& desc);
+    VertexShader(VertexShader&& other);
 };
 
 using FragmentShader = BaseShader<GL_FRAGMENT_SHADER>;
@@ -58,49 +86,37 @@ using FragmentShader = BaseShader<GL_FRAGMENT_SHADER>;
 class Program
 {
   public:
-    class Input {
-        const char* name_;
-        GLenum type_;
-        uint8_t cols_;
-        uint8_t rows_;
-      public:
-        Input(const char* name, GLenum type, uint8_t cols = 1, uint8_t rows = 1)
-          : name_(name),
-            type_(type),
-            cols_(cols),
-            rows_(rows)
-        {}
-        const char* name() const { return name_; }
-        GLenum gl_enum() const { return type_; }
-        bool isScalar() const { return cols_ == 1 && rows_ == 1; }
-        bool isVector() const { return cols_ != 1 && rows_ == 1; }
-        bool isMatrix() const { return cols_ != 1 && rows_ != 1; }
-    };
     template <typename T>
-    static Input MakeInput(const char* name) {
-        return Input(name, MapTypeToTraits<T>::gl_enum,
+    static UniformDesc MakeInput(const char* name) {
+        return UniformDesc(name, MapTypeToTraits<T>::gl_enum,
                      MapTypeToTraits<T>::cols, MapTypeToTraits<T>::rows);
     }
 
-    Program(const VertexShader& vs, const FragmentShader& fs,
-            std::vector<Input> inputVec = {});
+    Program(VertexShader&& vs, FragmentShader&& fs,
+            std::vector<UniformDesc> inputVec = {});
+    Program(Program&& other);
     ~Program();
 
     template <typename ...Args>
-    void run(const VertexBuffer& vb, Args&&... args) {
-        if (vb.vertexDesc() != vertexShader.vertexDesc)
+    void run(const PrimitiveData& prim, Args&&... args) {
+        if (!id)
+            throw std::runtime_error("attempt to run a moved or deleted program");
+        if (prim.vertexBuffer().vertexDesc() != vertexShader.vertexDesc)
             throw std::runtime_error("mismatched vertex description");
         if (inputs.size() != sizeof...(args))
             throw std::runtime_error("wrong number of inputs to shader");
 
+        AutoBindPrimitiveData bind(prim);
+
         glUseProgram(id);
-        vb.bind();
+        AutoEnableAttributes attribs(*this);
         bindUniforms<0>(args...);
-        enableVertexAttribs();
 
-        glDrawArrays(vb.primitiveKind(), 0, vb.numVerts());
+        prim.draw();
+    }
 
-        disableVertexAttribs();
+    void use() const {
+        glUseProgram(id);
     }
 
     template <size_t N, typename Fst, typename ...Args>
@@ -132,7 +148,26 @@ class Program
         glUniformMatrix4fv(index, 1, GL_FALSE, glm::value_ptr(m));
     }
 
-    void enableVertexAttribs() {
+  private:
+    class AutoEnableAttributes
+    {
+        AutoEnableAttributes(AutoEnableAttributes&&) = delete;
+        AutoEnableAttributes(const AutoEnableAttributes&) = delete;
+
+        const Program& program;
+
+      public:
+        AutoEnableAttributes(const Program& p)
+          : program(p)
+        {
+            program.enableVertexAttribs();
+        }
+        ~AutoEnableAttributes() {
+            program.disableVertexAttribs();
+        }
+    };
+
+    void enableVertexAttribs() const {
         for (auto& attr : vertexShader.vertexDesc.attributes()) {
             GLint index = glGetAttribLocation(id, attr.name());
             if (index == -1) {
@@ -144,16 +179,15 @@ class Program
         }
     }
 
-    void disableVertexAttribs() {
+    void disableVertexAttribs() const {
         for (auto& attr : vertexShader.vertexDesc.attributes())
             attr.disable();
     }
 
-  private:
-    const VertexShader& vertexShader;
-    const FragmentShader& fragmentShader;
-    const GLuint id;
-    const std::vector<Input> inputs;
+    VertexShader vertexShader;
+    FragmentShader fragmentShader;
+    GLuint id;
+    std::vector<UniformDesc> inputs;
 
     Program(const Program&) = delete;
 };

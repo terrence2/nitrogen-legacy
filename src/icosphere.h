@@ -31,8 +31,17 @@ class IcoSphere
     };
 
     IcoSphere(int iterations);
+    PrimitiveData uploadAsPoints() const;
+    PrimitiveData uploadAsWireframe() const;
+
+  private:
+    using Face = std::tuple<uint16_t, uint16_t, uint16_t>;
+    using Faces = std::vector<Face>;
+
+    glm::vec3 bisectEdge(glm::vec3& v0, glm::vec3& v1);
 
     std::vector<Vertex> verts;
+    Faces faces;
 };
 
 } // namespace glit

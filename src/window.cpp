@@ -39,13 +39,20 @@ glit::Window::init()
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
 
     // Use "windowed fullscreen" by getting the current settings.
-    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    int width = 1280;
+    int height = 720;
+    GLFWmonitor* monitor = nullptr;
+#ifndef __EMSCRIPTEN__
+    monitor = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+    glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
     glfwWindowHint(GLFW_RED_BITS, mode->redBits);
     glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
     glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
-    glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
-    window = glfwCreateWindow(mode->width, mode->height, "AFS", monitor, NULL);
+    width = mode->width;
+    height = mode->height;
+#endif
+    window = glfwCreateWindow(width, height, "AFS", monitor, NULL);
     if (!window)
         throw std::runtime_error("glfwCreateWindow failed");
 

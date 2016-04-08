@@ -29,6 +29,7 @@
 #include "bindings.h"
 #include "icosphere.h"
 #include "shader.h"
+#include "terrain.h"
 #include "vertex.h"
 #include "window.h"
 
@@ -37,8 +38,23 @@
 // does not have enough context to pass us an argument to the callback.
 static glit::Window gWindow;
 
-static glit::Program* gProgram;
-static glit::VertexBuffer* gTris;
+struct WorldState
+{
+    // The camera state.
+    struct Camera {
+        glm::mat4 projection;
+        glm::mat4 view;
+    } camera;
+
+    // Crappiest scene graph ever.
+    struct DrawSet {
+        glit::Program program;
+        glit::PrimitiveData primitive;
+        //glm::vec3 position;
+    };
+    std::vector<DrawSet> scene;
+};
+static WorldState gWorld;
 
 void
 do_loop()
@@ -46,14 +62,23 @@ do_loop()
     glClearColor(0, 0, 0, 255);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    /*
     auto projection = glm::perspective(glm::pi<float>() * 0.25f, 4.0f / 3.0f,
                                        0.1f, 100.f);
     auto view = glm::mat4(1.0f);
-    auto model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -10.0f));
-    model = glm::rotate(model, float(glfwGetTime()), glm::vec3(0.0f, 1.0f, 0.0f));
-    auto modelviewproj = projection * view * model;
+    */
 
-    gProgram->run(*gTris, modelviewproj);
+
+    for (auto& ds : gWorld.scene) {
+        auto model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -10.0f));
+        model = glm::rotate(model, float(glfwGetTime()), glm::vec3(0.0f, 1.0f, 0.0f));
+        auto modelviewproj =
+            gWorld.camera.projection *
+            gWorld.camera.view *
+            model;
+
+        ds.program.run(ds.primitive, modelviewproj);
+    }
 
     gWindow.swap();
 }
@@ -70,6 +95,73 @@ struct MyVertex {
 };
 */
 
+void
+setup_terrain()
+{
+    glit::Terrain terrain;
+    auto prim = terrain.uploadAsWireframe();
+    glit::VertexShader vsTerrain(
+            R"SHADER(
+            precision highp float;
+            uniform mat4 uModelViewProj;
+            attribute vec3 aPosition;
+            varying vec4 vColor;
+            void main()
+            {
+                gl_Position = uModelViewProj * vec4(aPosition, 1.0);
+                vColor = vec4(255, 255, 255, 255);
+            }
+            )SHADER",
+            prim.vertexBuffer().vertexDesc());
+    glit::FragmentShader fsTerrain(
+            R"SHADER(
+            precision highp float;
+            varying vec4 vColor;
+            void main() {
+                gl_FragColor = vColor;
+            }
+            )SHADER"
+        );
+    glit::Program progTerrain(std::move(vsTerrain), std::move(fsTerrain), {
+                glit::Program::MakeInput<glm::mat4>("uModelViewProj"),
+            });
+    gWorld.scene.push_back(WorldState::DrawSet{std::move(progTerrain),
+                                               std::move(prim)});
+}
+
+void setup_perspective()
+{
+    glit::IcoSphere sphere(3);
+    auto spherePrim = sphere.uploadAsWireframe();
+    glit::VertexShader vsSphere(
+            R"SHADER(
+            precision highp float;
+            uniform mat4 uModelViewProj;
+            attribute vec3 aPosition;
+            varying vec4 vColor;
+            void main()
+            {
+                gl_Position = uModelViewProj * vec4(aPosition, 1.0);
+                vColor = vec4(255, 255, 255, 255);
+            }
+            )SHADER",
+            spherePrim.vertexBuffer().vertexDesc());
+    glit::FragmentShader fsSphere(
+            R"SHADER(
+            precision highp float;
+            varying vec4 vColor;
+            void main() {
+                gl_FragColor = vColor;
+            }
+            )SHADER"
+        );
+    glit::Program progSphere(std::move(vsSphere), std::move(fsSphere), {
+                glit::Program::MakeInput<glm::mat4>("uModelViewProj"),
+            });
+    gWorld.scene.push_back(WorldState::DrawSet{std::move(progSphere),
+                                               std::move(spherePrim)});
+}
+
 int
 do_main()
 {
@@ -85,13 +177,18 @@ do_main()
     gWindow.setCurrentBindings(menuBindings);
     //gWindow.setSceneGraph(scene);
 
-    glit::IcoSphere sphere(0);
-    //glit::VertexBuffer sphereBuf = sphere.uploadPoints();
-    auto SphereVertexDesc = glit::VertexDescriptor::fromType<
-                                    glit::IcoSphere::Vertex>();
-    glit::VertexBuffer sphereGpuVerts(SphereVertexDesc);
-    sphereGpuVerts.upload(GL_LINE_STRIP, sphere.verts);
-    glit::VertexShader vsSphere(
+    // Default camera is at world origin pointing down -z.
+    gWorld.camera.view = glm::mat4(1.f);
+    gWorld.camera.projection = glm::perspective(glm::pi<float>() * 0.25f, 4.0f / 3.0f,
+                                                0.1f, 100.f);
+
+    setup_terrain();
+    setup_perspective();
+
+    /*
+    glit::Terrain terrain;
+    auto prim = terrain.uploadAsWireframe();
+    glit::VertexShader vsTerrain(
             R"SHADER(
             precision highp float;
             uniform mat4 uModelViewProj;
@@ -103,8 +200,8 @@ do_main()
                 vColor = vec4(255, 255, 255, 255);
             }
             )SHADER",
-            SphereVertexDesc);
-    glit::FragmentShader fsSphere(
+            prim.vertexBuffer().vertexDesc());
+    glit::FragmentShader fsTerrain(
             R"SHADER(
             precision highp float;
             varying vec4 vColor;
@@ -113,66 +210,12 @@ do_main()
             }
             )SHADER"
         );
-    glit::Program progSphere(vsSphere, fsSphere, {
+    glit::Program progTerrain(std::move(vsTerrain), std::move(fsTerrain), {
                 glit::Program::MakeInput<glm::mat4>("uModelViewProj"),
             });
-
-    gProgram = &progSphere;
-    gTris = &sphereGpuVerts;
-
-#if 0
-    auto MyVertexDesc = glit::VertexDescriptor::fromType<MyVertex>();
-    glit::VertexBuffer tris(MyVertexDesc);
-    const std::vector<MyVertex> triVerts{
-        { { 0.f,  .5f, 0.f},   {255,   0,   0, 255} },
-        { {-.5f, -.5f, 0.f},   {  0, 255,   0, 255} },
-        { { .5f, -.5f, 0.f},   {  0,   0, 255, 255} }
-    };
-    tris.upload(GL_TRIANGLES, triVerts);
-
-    glit::VertexShader vsTri(
-            R"SHADER(
-            precision highp float;
-            uniform float u_time;
-            attribute vec4 aPosition;
-            attribute vec4 aColor;
-            varying vec4 v_color;
-            void main()
-            {
-                float sz = sin(u_time);
-                float cz = cos(u_time);
-                mat4 rot = mat4(
-                    cz, -sz, 0,  0,
-                    sz,  cz, 0,  0,
-                    0,   0,  1,  0,
-                    0,   0,  0,  1
-                );
-                gl_Position = aPosition * rot;
-                v_color = aColor;
-            }
-            )SHADER",
-            MyVertexDesc
-            /*,
-            VaryingVec("v_color")
-            */
-        );
-    glit::FragmentShader fsTri(
-            R"SHADER(
-            precision highp float;
-            varying vec4 v_color;
-            void main() {
-                gl_FragColor = v_color;
-            }
-            )SHADER"
-            /*,
-            VaryingVec("v_color")
-            */
-        );
-    glit::Program prog(vsTri, fsTri, {glit::Program::MakeInput<float>("u_time")});
-
-    gProgram = &prog;
-    gTris = &tris;
-#endif
+    gWorld.scene.push_back(WorldState::DrawSet{std::move(progTerrain),
+                                               std::move(prim)});
+    */
 
 #ifndef __EMSCRIPTEN__
     while (!gWindow.isDone())

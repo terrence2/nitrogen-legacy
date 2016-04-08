@@ -32,6 +32,7 @@ ArrayLength(T (&aArr)[N])
 
 // Turn a C++ type into its matching GLenum.
 template <typename T> struct MapTypeToTraits{};
+template <const char* Name> struct MapNameToTraits{};
 #define MAKE_MAP(D) \
     D(float, GL_FLOAT, 1, 1) \
     D(uint8_t, GL_UNSIGNED_BYTE, 1, 1) \
@@ -47,6 +48,15 @@ template <typename T> struct MapTypeToTraits{};
     };
 MAKE_MAP(EXPAND_MAP_ITEM)
 #undef EXPAND_MAP_ITEM
+
+#define COMPARE(ty, en, _2, _3) if (name == std::string(#ty)) { return en; }
+inline GLenum
+MapTypeNameToGLenum(std::string name) {
+    MAKE_MAP(COMPARE)
+    return -1;
+}
+#undef COMPARE
+
 #undef MAKE_MAP
 
 // Both vertex data layout and how it maps to the underlying shader code
@@ -110,6 +120,7 @@ class VertexAttrib
     }
 
     const char* name() const { return name_; }
+    GLenum type() const { return type_; }
 
     void enable(GLint index) const;
     void disable() const;
@@ -163,29 +174,47 @@ class VertexDescriptor
     }
 };
 
-// A collection of verticies on the GPU.
-class VertexBuffer
+// Manage a GL buffer object.
+class BufferBase
 {
+    BufferBase(const BufferBase&) = delete;
+
+  protected:
+    BufferBase() : id(0) {
+        glGenBuffers(1, &id);
+    }
+    BufferBase(BufferBase&& other) : id(other.id) {
+        other.id = 0;
+    }
+    ~BufferBase() {
+        if (id)
+            glDeleteBuffers(1, &id);
+    }
+
     GLuint id;
-    const VertexDescriptor& vertexDesc_;
-    GLenum primitiveKind_;
+};
+
+// A collection of verticies on the GPU.
+class VertexBuffer : BufferBase
+{
+    const VertexDescriptor vertexDesc_;
     size_t numVerts_;
 
     VertexBuffer(const VertexBuffer&) = delete;
-    VertexBuffer(VertexBuffer&&) = delete;
 
   public:
     VertexBuffer(const VertexDescriptor& desc)
-      : id(0), vertexDesc_(desc), primitiveKind_(GL_POINTS), numVerts_(-1)
+      : BufferBase(), vertexDesc_(desc), numVerts_(-1)
+    {}
+    VertexBuffer(VertexBuffer&& other)
+      : BufferBase(std::forward<BufferBase>(other)),
+        vertexDesc_(other.vertexDesc_),
+        numVerts_(other.numVerts_)
     {
-        glGenBuffers(1, &id);
-    }
-    ~VertexBuffer() {
-        glDeleteBuffers(1, &id);
+        other.numVerts_ = -1;
     }
 
     const VertexDescriptor& vertexDesc() const { return vertexDesc_; }
-    GLenum primitiveKind() const { return primitiveKind_; }
     size_t numVerts() const { return numVerts_; }
 
     void bind() const {
@@ -194,17 +223,107 @@ class VertexBuffer
         glBindBuffer(GL_ARRAY_BUFFER, id);
     }
 
+    static void unbind() {
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+
     template <typename VertexType>
-    void upload(GLenum kind, const std::vector<VertexType>& verts) {
+    void upload(const std::vector<VertexType>& verts) {
         if (vertexDesc_ != VertexDescriptor::fromType<VertexType>())
             throw std::runtime_error("attempting to upload into wrong buffer type");
-        primitiveKind_ = kind;
         numVerts_ = verts.size();
         glBindBuffer(GL_ARRAY_BUFFER, id);
         glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(VertexType),
                      &verts[0], GL_STATIC_DRAW);
         std::cout << "uploaded " << verts.size() << " verts" << std::endl;
     }
+};
+
+// A collection of indexes on the GPU.
+class IndexBuffer : BufferBase
+{
+    size_t numIndices_;
+
+  public:
+    IndexBuffer() : BufferBase(), numIndices_(-1) {}
+    IndexBuffer(IndexBuffer&& other)
+      : BufferBase(std::forward<BufferBase>(other)),
+        numIndices_(other.numIndices_)
+    {
+        other.numIndices_ = -1;
+    }
+
+    size_t numIndices() const { return numIndices_; }
+
+    void bind() const {
+        if (numIndices_ == size_t(-1))
+            throw std::runtime_error("no index data uploaded");
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, id);
+    }
+
+    static void unbind() {
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    }
+
+    void upload(const std::vector<uint16_t>& indices) {
+        numIndices_ = indices.size();
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, id);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(uint16_t),
+                     &indices[0], GL_STATIC_DRAW);
+        std::cout << "uploaded " << indices.size() << " indices" << std::endl;
+    }
+};
+
+// A collection of buffers suitable for drawing a thing.
+class PrimitiveData
+{
+    VertexBuffer vb;
+    IndexBuffer ib;
+    GLenum primitiveKind;
+
+    PrimitiveData(const PrimitiveData&) = delete;
+
+  public:
+    PrimitiveData(GLenum kind, VertexBuffer&& v, IndexBuffer&& i)
+      : vb(std::forward<VertexBuffer>(v)),
+        ib(std::forward<IndexBuffer>(i)),
+        primitiveKind(kind)
+    {}
+    PrimitiveData(PrimitiveData&& other)
+      : vb(std::forward<VertexBuffer>(other.vb)),
+        ib(std::forward<IndexBuffer>(other.ib)),
+        primitiveKind(other.primitiveKind)
+    {
+        other.primitiveKind = -1;
+    }
+
+    const VertexBuffer& vertexBuffer() const { return vb; }
+
+    void bind() const {
+        vb.bind();
+        ib.bind();
+    }
+
+    void unbind() const {
+        ib.unbind();
+        vb.unbind();
+    }
+
+    void draw() const {
+        glDrawElements(primitiveKind, ib.numIndices(), GL_UNSIGNED_SHORT, 0);
+    }
+};
+
+class AutoBindPrimitiveData
+{
+    AutoBindPrimitiveData(AutoBindPrimitiveData&&) = delete;
+    AutoBindPrimitiveData(const AutoBindPrimitiveData&) = delete;
+
+    const PrimitiveData& primitive;
+
+  public:
+    AutoBindPrimitiveData(const PrimitiveData& p) : primitive(p) { primitive.bind(); }
+    ~AutoBindPrimitiveData() { primitive.unbind(); }
 };
 
 } // namespace glit

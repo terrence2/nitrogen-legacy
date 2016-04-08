@@ -20,6 +20,9 @@
 #define GLFW_INCLUDE_ES2
 #include <GLFW/glfw3.h>
 
+#include "utility.h"
+
+
 template <GLenum Type>
 glit::BaseShader<Type>::BaseShader(const char* source)
   : id(glCreateShader(Type))
@@ -45,21 +48,49 @@ glit::BaseShader<Type>::BaseShader(const char* source)
 }
 
 template <GLenum Type>
+glit::BaseShader<Type>::BaseShader(BaseShader&& other)
+  : id(other.id)
+{
+    other.id = 0;
+}
+
+template <GLenum Type>
 glit::BaseShader<Type>::~BaseShader()
 {
-    glDeleteShader(id);
+    if (id)
+        glDeleteShader(id);
+    id = 0;
 }
 
 template class glit::BaseShader<GL_FRAGMENT_SHADER>;
 template class glit::BaseShader<GL_VERTEX_SHADER>;
 
-glit::Program::Program(const VertexShader& vs, const FragmentShader& fs,
-                       std::vector<Input> inputVec /* = {} */)
-  : vertexShader(vs), fragmentShader(fs), id(glCreateProgram()),
+glit::VertexShader::VertexShader(const char* source, const VertexDescriptor& desc)
+  : Base(source),
+    vertexDesc(desc)
+{
+}
+
+glit::VertexShader::VertexShader(VertexShader&& other)
+  : Base(std::forward<BaseShader>(other)),
+    vertexDesc(other.vertexDesc)
+{
+}
+
+glit::Program::Program(VertexShader&& vs, FragmentShader&& fs,
+                       std::vector<UniformDesc> inputVec /* = {} */)
+  : vertexShader(std::forward<VertexShader>(vs)),
+    fragmentShader(std::forward<FragmentShader>(fs)),
+    id(glCreateProgram()),
     inputs(inputVec)
 {
-    glAttachShader(id, vs.id);
-    glAttachShader(id, fs.id);
+    if (!vertexShader.id)
+        throw std::runtime_error("using moved or deleted vertex shader");
+    if (!fragmentShader.id)
+        throw std::runtime_error("using moved or deleted fragment shader");
+
+    glAttachShader(id, vertexShader.id);
+    glAttachShader(id, fragmentShader.id);
     glLinkProgram(id);
     GLint linked = 0;
     glGetProgramiv(id, GL_LINK_STATUS, &linked);
@@ -77,9 +108,21 @@ glit::Program::Program(const VertexShader& vs, const FragmentShader& fs,
     }
 }
 
+glit::Program::Program(Program&& other)
+  : vertexShader(std::forward<VertexShader>(other.vertexShader)),
+    fragmentShader(std::forward<FragmentShader>(other.fragmentShader)),
+    id(other.id),
+    inputs(other.inputs)
+{
+    other.id = 0;
+}
+
 glit::Program::~Program()
 {
-    glDetachShader(id, fragmentShader.id);
-    glDetachShader(id, vertexShader.id);
-    glDeleteProgram(id);
+    if (id) {
+        glDetachShader(id, fragmentShader.id);
+        glDetachShader(id, vertexShader.id);
+        glDeleteProgram(id);
+    }
+    id = 0;
 }
