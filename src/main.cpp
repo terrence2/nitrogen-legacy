@@ -38,13 +38,33 @@
 // does not have enough context to pass us an argument to the callback.
 static glit::Window gWindow;
 
+class Camera
+{
+    // I think relatively constant. Can certainly be updated by settings
+    // changing the FOV. Probably also will need to tweak this as we render
+    // so that we can represent things that are very far away while still
+    // getting good z clipping up close.
+    glm::mat4 projection;
+    glm::mat4 view;
+
+  public:
+    Camera() {
+        // Default camera is at world origin pointing down -z.
+        view = glm::mat4(1.f);
+        projection = glm::perspective(glm::pi<float>() * 0.25f, 4.0f / 3.0f, 0.1f, 100.f);
+    }
+
+    // Combined projection and view, suitable for multiplying with a model
+    // to get a final transform matrix.
+    glm::mat4 transform() {
+        return projection * view;
+    }
+};
+
 struct WorldState
 {
     // The camera state.
-    struct Camera {
-        glm::mat4 projection;
-        glm::mat4 view;
-    } camera;
+    Camera camera;
 
     // Crappiest scene graph ever.
     struct DrawSet {
@@ -62,21 +82,12 @@ do_loop()
     glClearColor(0, 0, 0, 255);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    /*
-    auto projection = glm::perspective(glm::pi<float>() * 0.25f, 4.0f / 3.0f,
-                                       0.1f, 100.f);
-    auto view = glm::mat4(1.0f);
-    */
-
+    auto cameraMatrix = gWorld.camera.transform();
 
     for (auto& ds : gWorld.scene) {
         auto model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -10.0f));
         model = glm::rotate(model, float(glfwGetTime()), glm::vec3(0.0f, 1.0f, 0.0f));
-        auto modelviewproj =
-            gWorld.camera.projection *
-            gWorld.camera.view *
-            model;
-
+        auto modelviewproj = cameraMatrix * model;
         ds.program.run(ds.primitive, modelviewproj);
     }
 
@@ -176,11 +187,6 @@ do_main()
     gWindow.init();
     gWindow.setCurrentBindings(menuBindings);
     //gWindow.setSceneGraph(scene);
-
-    // Default camera is at world origin pointing down -z.
-    gWorld.camera.view = glm::mat4(1.f);
-    gWorld.camera.projection = glm::perspective(glm::pi<float>() * 0.25f, 4.0f / 3.0f,
-                                                0.1f, 100.f);
 
     setup_terrain();
     setup_perspective();
