@@ -12,16 +12,23 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
+#include <memory>
+#include <tuple>
 #include <vector>
 
 #include <glm/vec3.hpp>
 
+#include "mesh.h"
+#include "shader.h"
 #include "vertex.h"
 
 namespace glit {
 
 class IcoSphere
 {
+    using Face = std::tuple<uint16_t, uint16_t, uint16_t>;
+    using Faces = std::vector<Face>;
+
   public:
     struct Vertex {
         glm::vec3 aPosition;
@@ -31,12 +38,20 @@ class IcoSphere
     };
 
     IcoSphere(int iterations);
-    PrimitiveData uploadAsPoints() const;
-    PrimitiveData uploadAsWireframe() const;
+    Mesh uploadAsPoints() const;
+    Mesh uploadAsWireframe() const;
+
+    const std::vector<Vertex>& vertices() const { return verts; }
+    const Faces faceList() const { return faces; }
+
+    template <size_t Offset>
+    const glm::vec3& faceVertexPosition(size_t fc) const {
+        return verts[std::get<Offset>(faces[fc])].aPosition;
+    }
 
   private:
-    using Face = std::tuple<uint16_t, uint16_t, uint16_t>;
-    using Faces = std::vector<Face>;
+    static std::shared_ptr<Program> makePointsProgram();
+    std::shared_ptr<Program> programPoints;
 
     glm::vec3 bisectEdge(glm::vec3& v0, glm::vec3& v1);
 

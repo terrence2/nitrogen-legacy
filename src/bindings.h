@@ -12,7 +12,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
-#define GLFW_INCLUDE_ES2
+#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
 #include <string>

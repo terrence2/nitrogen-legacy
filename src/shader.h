@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-#define GLFW_INCLUDE_ES2
+#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
 #include <glm/mat4x4.hpp>
@@ -26,25 +26,27 @@
 
 namespace glit {
 
-class UniformDesc {
+// Information required to look up and bind a uniform.
+class UniformDesc
+{
     const char* name_;
     GLenum type_;
     uint8_t cols_;
     uint8_t rows_;
+
+    UniformDesc() = delete;
+
   public:
-    UniformDesc(const char* name, GLenum type, uint8_t cols = 1, uint8_t rows = 1)
-      : name_(name),
-        type_(type),
-        cols_(cols),
-        rows_(rows)
-    {}
+    UniformDesc(const char* name, GLenum type,
+                uint8_t cols = 1, uint8_t rows = 1);
     const char* name() const { return name_; }
-    GLenum gl_enum() const { return type_; }
+    GLenum glEnum() const { return type_; }
     bool isScalar() const { return cols_ == 1 && rows_ == 1; }
     bool isVector() const { return cols_ != 1 && rows_ == 1; }
     bool isMatrix() const { return cols_ != 1 && rows_ != 1; }
 };
 
+// Manages a shader id and the compilation process.
 template <GLenum Type>
 class BaseShader
 {
@@ -53,19 +55,13 @@ class BaseShader
 
     BaseShader(const BaseShader&) = delete;
 
-    /*
-  protected:
-    using TypeNamePair = std::pair<std::string, std::string>;
-    using TypeNamePairs = std::vector<TypeNamePair>;
-    TypeNamePairs findQualifiedTypes(const char* source, const std::string& qualifier);
-    */
-
   public:
     BaseShader(const char* source);
     BaseShader(BaseShader&& other);
     ~BaseShader();
 };
 
+// A shader which can accept attributes, as defined by a VertexDescriptor.
 class VertexShader : public BaseShader<GL_VERTEX_SHADER>
 {
     using Base = BaseShader<GL_VERTEX_SHADER>;
@@ -80,9 +76,10 @@ class VertexShader : public BaseShader<GL_VERTEX_SHADER>
     VertexShader(VertexShader&& other);
 };
 
+// A shader that provides a screen buffer as output.
 using FragmentShader = BaseShader<GL_FRAGMENT_SHADER>;
 
-// A shader program.
+// A complete shader program.
 class Program
 {
   public:
@@ -97,33 +94,15 @@ class Program
     Program(Program&& other);
     ~Program();
 
-    template <typename ...Args>
-    void run(const PrimitiveData& prim, Args&&... args) {
-        if (!id)
-            throw std::runtime_error("attempt to run a moved or deleted program");
-        if (prim.vertexBuffer().vertexDesc() != vertexShader.vertexDesc)
-            throw std::runtime_error("mismatched vertex description");
-        if (inputs.size() != sizeof...(args))
-            throw std::runtime_error("wrong number of inputs to shader");
-
-        AutoBindPrimitiveData bind(prim);
-
-        glUseProgram(id);
-        AutoEnableAttributes attribs(*this);
-        bindUniforms<0>(args...);
-
-        prim.draw();
-    }
-
-    void use() const {
-        glUseProgram(id);
-    }
+    void use() const;
 
     template <size_t N, typename Fst, typename ...Args>
-    void bindUniforms(Fst&& fst, Args&&... args) {
+    void bindUniforms(Fst&& fst, Args&&... args) const {
+        if (inputs.size() - N != sizeof...(args) + 1)
+            throw std::runtime_error("wrong number of inputs to shader");
         GLenum actual_enum = MapTypeToTraits<
             typename std::remove_reference<Fst>::type>::gl_enum;
-        if (inputs[N].gl_enum() != actual_enum) {
+        if (inputs[N].glEnum() != actual_enum) {
             throw std::runtime_error(std::string("type mismatch at input ") +
                                      std::to_string(N));
         }
@@ -131,8 +110,8 @@ class Program
         if (index == -1) {
             // The shader compiler might optimize out a perfectly reasonable
             // input. This gets particularly annoying when trying to debug a
-            // shader. Instead of erroring out, we just ignore the missing input
-            // and print a warning.
+            // shader. Instead of erroring out, we just ignore the missing
+            // input and print a warning.
             std::cerr << "trying to bind to an unknown uniform " <<
                          inputs[N].name() << std::endl;
         } else {
@@ -141,14 +120,13 @@ class Program
         bindUniforms<N + 1>(args...);
     }
     template <size_t N>
-    void bindUniforms() {}
-    void bindUniform(GLint index, float f) { glUniform1f(index, f); }
-    void bindUniform(GLint index, int i) { glUniform1i(index, i); }
-    void bindUniform(GLint index, const glm::mat4& m) {
+    void bindUniforms() const {}
+    void bindUniform(GLint index, float f) const { glUniform1f(index, f); }
+    void bindUniform(GLint index, int i) const { glUniform1i(index, i); }
+    void bindUniform(GLint index, const glm::mat4& m) const {
         glUniformMatrix4fv(index, 1, GL_FALSE, glm::value_ptr(m));
     }
 
-  private:
     class AutoEnableAttributes
     {
         AutoEnableAttributes(AutoEnableAttributes&&) = delete;
@@ -157,32 +135,13 @@ class Program
         const Program& program;
 
       public:
-        AutoEnableAttributes(const Program& p)
-          : program(p)
-        {
-            program.enableVertexAttribs();
-        }
-        ~AutoEnableAttributes() {
-            program.disableVertexAttribs();
-        }
+        AutoEnableAttributes(const Program& p, const VertexBuffer& vb);
+        ~AutoEnableAttributes();
     };
 
-    void enableVertexAttribs() const {
-        for (auto& attr : vertexShader.vertexDesc.attributes()) {
-            GLint index = glGetAttribLocation(id, attr.name());
-            if (index == -1) {
-                throw std::runtime_error(std::string(
-                            "failed to enable vertex attribute: " +
-                            std::string(attr.name())));
-            }
-            attr.enable(index);
-        }
-    }
-
-    void disableVertexAttribs() const {
-        for (auto& attr : vertexShader.vertexDesc.attributes())
-            attr.disable();
-    }
+  private:
+    void enableVertexAttribs() const;
+    void disableVertexAttribs() const;
 
     VertexShader vertexShader;
     FragmentShader fragmentShader;

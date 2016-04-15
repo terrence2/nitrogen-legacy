@@ -13,10 +13,15 @@
 
 #include <stdexcept>
 #include <iostream>
+#include <memory>
 #include <type_traits>
 
 #include <math.h>
 #include <stdio.h>
+
+//#define GLFW_INCLUDE_ES2
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
 
 #ifdef __EMSCRIPTEN__
 #  include <emscripten.h>
@@ -33,6 +38,8 @@
 #include "vertex.h"
 #include "window.h"
 
+using namespace glm;
+using namespace std;
 
 // Emscripten is getting its callbacks from the browsers refresh driver, so
 // does not have enough context to pass us an argument to the callback.
@@ -44,10 +51,14 @@ class Camera
     // changing the FOV. Probably also will need to tweak this as we render
     // so that we can represent things that are very far away while still
     // getting good z clipping up close.
-    glm::mat4 projection;
+    mat4 projection;
 
     // Updated constantly by input events.
-    glm::mat4 view;
+    vec3 position;
+    vec3 direction;
+
+    constexpr static float NearDistance = 0.001f;
+    constexpr static float FarDistance = 200000.f;
 
     Camera(Camera&&) = delete;
     Camera(const Camera&) = delete;
@@ -55,13 +66,26 @@ class Camera
   public:
     Camera() {
         // Default camera is at world origin pointing down -z.
-        view = glm::mat4(1.f);
-        projection = glm::perspective(glm::pi<float>() * 0.25f, 4.0f / 3.0f, 0.1f, 100.f);
+        position = vec3(0.f, 0.f, 0.f);
+        direction = vec3(0.f, 0.f, -1.f);
+        projection = perspective(pi<float>() * 0.25f, 1.f,
+                                      NearDistance, FarDistance);
+    }
+
+    void screenSizeChanged(float width, float height) {
+        projection = perspective(pi<float>() * 0.25f, width / height,
+                                      NearDistance, FarDistance);
+    }
+
+    void warp(const vec3& pos, const vec3& dir) {
+        position = pos;
+        direction = dir;
     }
 
     // Combined projection and view, suitable for multiplying with a model
     // to get a final transform matrix.
-    glm::mat4 transform() const {
+    mat4 transform() const {
+        auto view = lookAt(position, position + direction, vec3(0.f, 1.f, 0.f));
         return projection * view;
     }
 };
@@ -75,155 +99,119 @@ class Entity
     virtual void draw(const Camera& camera) = 0;
 };
 
+class POI : public Entity
+{
+    glit::Mesh primitive;
+
+    explicit POI(POI&&) = delete;
+    explicit POI(const POI&) = delete;
+
+  public:
+    vec3 position;
+    vec3 view_direction;
+
+    POI(glit::Mesh&& prim)
+      : primitive(forward<glit::Mesh>(prim))
+      , position(0.f, 6371.f * 2.f, 0.f)
+      , view_direction(0.f, 0.f, -1.f)
+    {}
+    ~POI() override {}
+
+    static shared_ptr<POI> create() {
+        glit::IcoSphere sphere(3);
+        auto mesh = sphere.uploadAsWireframe();
+        return make_shared<POI>(move(mesh));
+    }
+
+    void tick(double t, double dt) override {
+        auto rot = rotate(mat4(1.f), 0.001f,
+                normalize(vec3(1.f, 0.f, -1.f)));
+        position = rot * vec4(position, 1.f);
+    }
+
+    void draw(const Camera& camera) override {
+        auto model = translate(mat4(1.0f), position);
+        const static float s = 100.f;
+        model = scale(model, vec3(s,s,s));
+        //model = rotate(model, rotation, vec3(0.0f, 1.0f, 0.0f));
+        auto modelviewproj = camera.transform() * model;
+        primitive.draw(modelviewproj);
+    }
+};
 
 class Planet : public Entity
 {
     // The terrain state. Updated by providing the camera in draw.
     glit::Terrain terrain;
 
-    // For drawing the wireframe view.
-    glit::Program progWireframe;
-
     // The current rotational state.
     float rotation;
 
-    // The constructor
-    explicit Planet(glit::Program&& progWF)
-      : progWireframe(std::forward<glit::Program>(progWF))
-    {}
+    // Pointer to the point of interest that we want to treat as the camera.
+    weak_ptr<POI> poi;
 
     explicit Planet(Planet&&) = delete;
     explicit Planet(const Planet&) = delete;
 
   public:
+    explicit Planet(shared_ptr<POI> poi)
+      : terrain(6371.f), //km
+        rotation(0.f),
+        poi(poi)
+    {}
     ~Planet() override {}
-    static Planet* create() {
-        auto VertexDesc = glit::VertexDescriptor::fromType<glit::Terrain::Vertex>();
-        glit::VertexShader vs(
-                R"SHADER(
-                precision highp float;
-                uniform mat4 uModelViewProj;
-                attribute vec3 aPosition;
-                varying vec4 vColor;
-                void main()
-                {
-                    gl_Position = uModelViewProj * vec4(aPosition, 1.0);
-                    vColor = vec4(255, 255, 255, 255);
-                }
-                )SHADER",
-                VertexDesc);
-        glit::FragmentShader fs(
-                R"SHADER(
-                precision highp float;
-                varying vec4 vColor;
-                void main() {
-                    gl_FragColor = vColor;
-                }
-                )SHADER"
-            );
-        glit::Program prog(std::move(vs), std::move(fs), {
-                    glit::Program::MakeInput<glm::mat4>("uModelViewProj"),
-                });
-        return new Planet(std::move(prog));
-    }
 
     void tick(double t, double dt) override {
+        /*
         rotation += dt;
         while (rotation > 2.0 * M_PI)
             rotation -= 2.0 * M_PI;
+        */
     }
 
     void draw(const Camera& camera) override {
-        auto model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -10.0f));
-        model = glm::rotate(model, rotation, glm::vec3(0.0f, 1.0f, 0.0f));
+        auto model = rotate(mat4(1.f), rotation, vec3(0.0f, 1.0f, 0.0f));
         auto modelviewproj = camera.transform() * model;
 
-        auto primitive = terrain.uploadAsWireframe();
-        progWireframe.run(primitive, modelviewproj);
+        auto poip = poi.lock();
+        if (!poip)
+            return;
+
+        auto mesh = terrain.uploadAsWireframe(poip->position,
+                                              poip->view_direction);
+        mesh.draw(modelviewproj);
     }
 };
+
 
 struct WorldState
 {
     // The camera state.
     Camera camera;
 
-    // Crappiest scene graph ever.
-    struct DrawSet {
-        glit::Program program;
-        glit::PrimitiveData primitive;
-    };
-    std::vector<DrawSet> scene;
-
-    std::vector<Entity*> entities;
-
-    ~WorldState() {
-        for (auto* e : entities)
-            delete e;
-        entities.clear();
-    }
+    // Things to draw.
+    vector<shared_ptr<Entity>> entities;
 };
 static WorldState gWorld;
 
-void
-do_loop()
+
+static void do_loop();
+static int do_main();
+
+int main()
 {
-    static double lastFrameTime = 0.0;
-    double now = glfwGetTime();
-
-    glClearColor(0, 0, 0, 255);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    for (auto* e : gWorld.entities)
-        e->tick(now, now - lastFrameTime);
-
-    auto cameraMatrix = gWorld.camera.transform();
-
-    for (auto& ds : gWorld.scene) {
-        auto model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -10.0f));
-        model = glm::rotate(model, float(now), glm::vec3(0.0f, 1.0f, 0.0f));
-        auto modelviewproj = cameraMatrix * model;
-        ds.program.run(ds.primitive, modelviewproj);
+#ifdef __EMSCRIPTEN__
+    try {
+        do_main();
+    } catch(runtime_error& sre) {
+        // Empscripten does not handle exceptions at the top level, so be sure
+        // to print them out manually.
+        cerr << "Runtime error: " << sre.what() << endl;
     }
-
-    for (auto* e : gWorld.entities)
-        e->draw(gWorld.camera);
-
-    gWindow.swap();
-    lastFrameTime = now;
-}
-
-void setup_perspective()
-{
-    glit::IcoSphere sphere(3);
-    auto spherePrim = sphere.uploadAsWireframe();
-    glit::VertexShader vsSphere(
-            R"SHADER(
-            precision highp float;
-            uniform mat4 uModelViewProj;
-            attribute vec3 aPosition;
-            varying vec4 vColor;
-            void main()
-            {
-                gl_Position = uModelViewProj * vec4(aPosition, 1.0);
-                vColor = vec4(255, 255, 255, 255);
-            }
-            )SHADER",
-            spherePrim.vertexBuffer().vertexDesc());
-    glit::FragmentShader fsSphere(
-            R"SHADER(
-            precision highp float;
-            varying vec4 vColor;
-            void main() {
-                gl_FragColor = vColor;
-            }
-            )SHADER"
-        );
-    glit::Program progSphere(std::move(vsSphere), std::move(fsSphere), {
-                glit::Program::MakeInput<glm::mat4>("uModelViewProj"),
-            });
-    gWorld.scene.push_back(WorldState::DrawSet{std::move(progSphere),
-                                               std::move(spherePrim)});
+#else
+    // Otherwise, let the platform catch it.
+    do_main();
+#endif // __EMSCRIPTEN__
 }
 
 int
@@ -240,10 +228,12 @@ do_main()
     gWindow.init();
     gWindow.setCurrentBindings(menuBindings);
     //gWindow.setSceneGraph(scene);
+    gWorld.camera.screenSizeChanged(gWindow.width(), gWindow.height());
+    gWorld.camera.warp(vec3(0.f, 0.f, 6371.002f * 5), vec3(0.f, 0.f, -1.f));
 
-    gWorld.entities.push_back(Planet::create());
-    setup_perspective();
-
+    auto poi = POI::create();
+    gWorld.entities.push_back(make_shared<Planet>(poi));
+    gWorld.entities.push_back(poi);
 
 #ifndef __EMSCRIPTEN__
     while (!gWindow.isDone())
@@ -255,19 +245,27 @@ do_main()
     return 0;
 }
 
-int main()
+void
+do_loop()
 {
-#ifdef __EMSCRIPTEN__
-    try {
-        do_main();
-    } catch(std::runtime_error& sre) {
-        // Empscripten does not handle exceptions at the top level, so be sure
-        // to print them out manually.
-        std::cerr << "Runtime error: " << sre.what() << std::endl;
-    }
-#else
-    // Otherwise, let the platform catch it.
-    do_main();
-#endif // __EMSCRIPTEN__
+    static double lastFrameTime = 0.0;
+    double now = glfwGetTime();
+
+    float off = 6371.f * 5.f;
+    vec3 pos(off * sin(now / 2.f), 0.f, off * cos(now / 2.f));
+    vec3 dir = normalize(-pos);
+    gWorld.camera.warp(pos, dir);
+
+    glClearColor(0, 0, 0, 255);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    for (auto e : gWorld.entities)
+        e->tick(now, now - lastFrameTime);
+
+    for (auto e : gWorld.entities)
+        e->draw(gWorld.camera);
+
+    gWindow.swap();
+    lastFrameTime = now;
 }
 

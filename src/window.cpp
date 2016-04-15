@@ -52,7 +52,7 @@ glit::Window::init()
     width = mode->width;
     height = mode->height;
 #endif
-    window = glfwCreateWindow(width, height, "AFS", monitor, NULL);
+    window = glfwCreateWindow(width, height, "fsim", monitor, NULL);
     if (!window)
         throw std::runtime_error("glfwCreateWindow failed");
 
@@ -65,12 +65,15 @@ glit::Window::init()
     glfwSetWindowCloseCallback(window, windowCloseCallback);
     glfwSetWindowSizeCallback(window, windowSizeCallback);
 
+    // Do late binding of GL primitives.
     glfwMakeContextCurrent(window);
+    gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
 #define PRINT_GL_STRING(key) \
     std::cout << #key << ": " << glGetString(key) << std::endl;
 FOR_EACH_GL_STRINGS(PRINT_GL_STRING)
 #undef PRINT_GL_STRING
+    // we need GL_OES_element_index_uint
 }
 
 glit::Window::~Window()

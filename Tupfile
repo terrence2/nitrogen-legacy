@@ -1,8 +1,10 @@
 .gitignore
-CFLAGS += -Wall -std=c++14 -Ideps/glm @(CFLAGS)
+CFLAGS += -Wall -Ideps/glm -Ideps/glad/include @(CFLAGS)
 CFLAGS += `pkg-config --cflags glfw3`
+CXXFLAGS += -std=c++14 $(CFLAGS)
 
-LIBS += `pkg-config --libs glfw3` -lGLESv2
+LIBS += `pkg-config --libs glfw3` -lGLESv2 -lm
 
-: foreach src/*.cpp |> @(CC) $(CFLAGS) -c %f -o %o |> %B.o
-: *.o |> @(CC) $(CFLAGS) %f -o %o $(LIBS) |> fsim@(EXT)
+: deps/glad/src/glad.c |> @(CC)  $(CFLAGS)   -c %f -o %o |> %B.o
+: foreach src/*.cpp    |> @(CXX) $(CXXFLAGS) -c %f -o %o |> %B.o
+: *.o |> @(CXX) $(CXXFLAGS) %f -o %o $(LIBS) |> fsim@(EXT)

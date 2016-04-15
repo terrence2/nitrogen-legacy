@@ -17,11 +17,21 @@
 #include <stdexcept>
 #include <string>
 
-#define GLFW_INCLUDE_ES2
+#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
 #include "utility.h"
 
+using namespace std;
+
+
+glit::UniformDesc::UniformDesc(const char* name, GLenum type,
+                               uint8_t cols /* = 1 */, uint8_t rows /* = 1 */)
+  : name_(name)
+  , type_(type)
+  , cols_(cols)
+  , rows_(rows)
+{}
 
 template <GLenum Type>
 glit::BaseShader<Type>::BaseShader(const char* source)
@@ -37,13 +47,13 @@ glit::BaseShader<Type>::BaseShader(const char* source)
         glGetShaderiv(id, GL_INFO_LOG_LENGTH, &log_len);
         if (!log_len) {
             glDeleteShader(id);
-            throw std::runtime_error("shader compilation failed with no output");
+            throw runtime_error("shader compilation failed with no output");
         }
-        std::unique_ptr<GLchar> info(new GLchar[log_len]);
+        unique_ptr<GLchar> info(new GLchar[log_len]);
         glGetShaderInfoLog(id, log_len, nullptr, info.get());
         glDeleteShader(id);
-        throw std::runtime_error(std::string("shader compilation failed:\n") +
-                                 std::string(info.release()));
+        throw runtime_error(string("shader compilation failed:\n") +
+                            string(info.release()));
     }
 }
 
@@ -72,22 +82,22 @@ glit::VertexShader::VertexShader(const char* source, const VertexDescriptor& des
 }
 
 glit::VertexShader::VertexShader(VertexShader&& other)
-  : Base(std::forward<BaseShader>(other)),
+  : Base(forward<BaseShader>(other)),
     vertexDesc(other.vertexDesc)
 {
 }
 
 glit::Program::Program(VertexShader&& vs, FragmentShader&& fs,
-                       std::vector<UniformDesc> inputVec /* = {} */)
-  : vertexShader(std::forward<VertexShader>(vs)),
-    fragmentShader(std::forward<FragmentShader>(fs)),
+                       vector<UniformDesc> inputVec /* = {} */)
+  : vertexShader(forward<VertexShader>(vs)),
+    fragmentShader(forward<FragmentShader>(fs)),
     id(glCreateProgram()),
     inputs(inputVec)
 {
     if (!vertexShader.id)
-        throw std::runtime_error("using moved or deleted vertex shader");
+        throw runtime_error("using moved or deleted vertex shader");
     if (!fragmentShader.id)
-        throw std::runtime_error("using moved or deleted fragment shader");
+        throw runtime_error("using moved or deleted fragment shader");
 
     glAttachShader(id, vertexShader.id);
     glAttachShader(id, fragmentShader.id);
@@ -99,18 +109,18 @@ glit::Program::Program(VertexShader&& vs, FragmentShader&& fs,
         glGetProgramiv(id, GL_INFO_LOG_LENGTH, &log_len);
         if (!log_len) {
             glDeleteProgram(id);
-            throw std::runtime_error("program link failure with no output");
+            throw runtime_error("program link failure with no output");
         }
-        std::unique_ptr<GLchar> info(new GLchar[log_len]);
+        unique_ptr<GLchar> info(new GLchar[log_len]);
         glDeleteProgram(id);
-        throw std::runtime_error(std::string("shader program link failed:\n") +
-                                 std::string(info.release()));
+        throw runtime_error(string("shader program link failed:\n") +
+                            string(info.release()));
     }
 }
 
 glit::Program::Program(Program&& other)
-  : vertexShader(std::forward<VertexShader>(other.vertexShader)),
-    fragmentShader(std::forward<FragmentShader>(other.fragmentShader)),
+  : vertexShader(forward<VertexShader>(other.vertexShader)),
+    fragmentShader(forward<FragmentShader>(other.fragmentShader)),
     id(other.id),
     inputs(other.inputs)
 {
@@ -125,4 +135,47 @@ glit::Program::~Program()
         glDeleteProgram(id);
     }
     id = 0;
+}
+
+void
+glit::Program::use() const
+{
+    if (!id)
+        throw runtime_error("attempt to run a moved or deleted program");
+    glUseProgram(id);
+}
+
+glit::Program::AutoEnableAttributes::AutoEnableAttributes(
+        const Program& p, const VertexBuffer& vb)
+  : program(p)
+{
+    if (vb.vertexDesc() != program.vertexShader.vertexDesc)
+        throw runtime_error("mismatched vertex description");
+    program.enableVertexAttribs();
+}
+
+glit::Program::AutoEnableAttributes::~AutoEnableAttributes()
+{
+    program.disableVertexAttribs();
+}
+
+void
+glit::Program::enableVertexAttribs() const
+{
+    for (auto& attr : vertexShader.vertexDesc.attributes()) {
+        GLint index = glGetAttribLocation(id, attr.name());
+        if (index == -1) {
+            throw runtime_error(string(
+                        "failed to enable vertex attribute: " +
+                        string(attr.name())));
+        }
+        attr.enable(index);
+    }
+}
+
+void
+glit::Program::disableVertexAttribs() const
+{
+    for (auto& attr : vertexShader.vertexDesc.attributes())
+        attr.disable();
 }

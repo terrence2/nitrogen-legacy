@@ -14,7 +14,7 @@
 
 #include <unordered_map>
 
-#define GLFW_INCLUDE_ES2
+#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
 #include "bindings.h"

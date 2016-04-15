@@ -14,12 +14,21 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <locale>
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include <glm/glm.hpp>
+
+inline std::ostream&
+operator<< (std::ostream &stream, const glm::vec3 &v)
+{
+    return stream << "{" << v.x << "," << v.y << "," << v.z << "}";
+}
 
 // Call the macro D on each string that can be passed to glGetString.
 #define FOR_EACH_GL_STRINGS(D) \
@@ -30,7 +39,77 @@
     D(GL_EXTENSIONS)
 
 namespace glit {
+// Turn a C++ type into its matching GLenum.
+template <typename T> struct MapTypeToTraits{};
+template <const char* Name> struct MapNameToTraits{};
+#define MAKE_MAP(D) \
+    D(float, GL_FLOAT, 1, 1) \
+    D(uint8_t, GL_UNSIGNED_BYTE, 1, 1) \
+    D(glm::vec2, GL_FLOAT, 2, 1) \
+    D(glm::vec3, GL_FLOAT, 3, 1) \
+    D(glm::mat4, GL_FLOAT, 4, 4)
+#define EXPAND_MAP_ITEM(ty, en, rows_, cols_) \
+    template <> struct MapTypeToTraits<ty> { \
+        using type = ty; \
+        static const GLenum gl_enum = (en); \
+        static const uint8_t rows = (rows_); \
+        static const uint8_t cols = (cols_); \
+        static const uint8_t extent = (rows_) * (cols_); \
+    };
+MAKE_MAP(EXPAND_MAP_ITEM)
+#undef EXPAND_MAP_ITEM
+#undef MAKE_MAP
+
 namespace util {
+
+template <typename T>
+inline const GLvoid*
+BufferOffset(size_t offset)
+{
+    return reinterpret_cast<const GLvoid*>(offset * sizeof(T));
+}
+
+// Time the live range of timer and print out a tagged runtime
+// on destruction.
+class Timer
+{
+    using Clock = std::chrono::high_resolution_clock;
+    using Duration = std::chrono::duration<double>;
+    Clock::time_point tStart;
+    std::string ident;
+
+  public:
+    Timer(std::string id) : tStart(Clock::now()), ident(id) {}
+    ~Timer() {
+        auto tEnd = Clock::now();
+        Duration span = std::chrono::duration_cast<Duration>(tEnd - tStart);
+        std::cout << ident << ": " << span.count() << "sec" << std::endl;
+    }
+};
+
+// Runtime representation of a numerator / denominator pair.
+class Ratio
+{
+    size_t numerator;
+    size_t denominator;
+
+  public:
+    Ratio(size_t n, size_t d)
+      : numerator(n), denominator(d)
+    {}
+
+    size_t operator*(size_t s) const {
+        return s * numerator / denominator;
+    }
+};
+
+// Statically derive the number of elements in a fixed-length array.
+template<typename T, size_t N>
+constexpr size_t
+ArrayLength(T (&aArr)[N])
+{
+    return N;
+}
 
 inline std::vector<std::string>
 split(const std::string &s, char delim)

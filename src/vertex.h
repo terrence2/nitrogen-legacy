@@ -13,52 +13,23 @@
 #pragma once
 
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <vector>
 
-#define GLFW_INCLUDE_ES2
+#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
 #include <glm/mat4x4.hpp>
 
+#include "utility.h"
+
 namespace glit {
 
-template<typename T, size_t N>
-constexpr size_t
-ArrayLength(T (&aArr)[N])
-{
-    return N;
-}
-
-// Turn a C++ type into its matching GLenum.
-template <typename T> struct MapTypeToTraits{};
-template <const char* Name> struct MapNameToTraits{};
-#define MAKE_MAP(D) \
-    D(float, GL_FLOAT, 1, 1) \
-    D(uint8_t, GL_UNSIGNED_BYTE, 1, 1) \
-    D(glm::vec3, GL_FLOAT, 3, 1) \
-    D(glm::mat4, GL_FLOAT, 4, 4)
-#define EXPAND_MAP_ITEM(ty, en, rows_, cols_) \
-    template <> struct MapTypeToTraits<ty> { \
-        using type = ty; \
-        static const GLenum gl_enum = (en); \
-        static const uint8_t rows = (rows_); \
-        static const uint8_t cols = (cols_); \
-        static const uint8_t extent = (rows_) * (cols_); \
-    };
-MAKE_MAP(EXPAND_MAP_ITEM)
-#undef EXPAND_MAP_ITEM
-
-#define COMPARE(ty, en, _2, _3) if (name == std::string(#ty)) { return en; }
-inline GLenum
-MapTypeNameToGLenum(std::string name) {
-    MAKE_MAP(COMPARE)
-    return -1;
-}
-#undef COMPARE
-
-#undef MAKE_MAP
-
+// VertexAttrib contains all of the data required to map a piece of a program's
+// vertex format onto the shader's input system, and verifies dynamically that
+// the compiled program and the data format match.
+//
 // Both vertex data layout and how it maps to the underlying shader code
 // are given to opengl via a single call. Most of the data is inherent to
 // the Vertex class, but some of it can come from the program itself.
@@ -101,23 +72,10 @@ class VertexAttrib
 
   public:
     VertexAttrib(const char* name, size_t size, GLenum type,
-                 bool normalized, size_t stride, size_t offset)
-      : name_(name), size_(size), type_(type), normalized_(normalized),
-        stride_(stride), offset_(offset), index_(-1)
-    {}
+                 bool normalized, size_t stride, size_t offset);
 
-    bool operator==(const VertexAttrib& other) const {
-        return name_ == other.name_ &&
-               index_ == other.index_ &&
-               size_ == other.size_ &&
-               type_ == other.type_ &&
-               normalized_ == other.normalized_ &&
-               stride_ == other.stride_ &&
-               offset_ == other.offset_;
-    }
-    bool operator !=(const VertexAttrib& other) const {
-        return !operator==(other);
-    }
+    bool operator==(const VertexAttrib& other) const;
+    bool operator !=(const VertexAttrib& other) const;
 
     const char* name() const { return name_; }
     GLenum type() const { return type_; }
@@ -157,6 +115,8 @@ class VertexDescriptor
     std::vector<VertexAttrib> attribs;
 
   public:
+    VertexDescriptor() {}
+
     template <typename Vertex>
     static VertexDescriptor fromType() {
         VertexDescriptor self;
@@ -166,32 +126,22 @@ class VertexDescriptor
 
     const std::vector<VertexAttrib>& attributes() const { return attribs; }
 
-    bool operator==(const VertexDescriptor& other) const {
-        return attribs == other.attribs;
-    }
-    bool operator !=(const VertexDescriptor& other) const {
-        return !operator==(other);
-    }
+    bool operator==(const VertexDescriptor& other) const;
+    bool operator!=(const VertexDescriptor& other) const;
 };
 
 // Manage a GL buffer object.
 class BufferBase
 {
-    BufferBase(const BufferBase&) = delete;
-
   protected:
-    BufferBase() : id(0) {
-        glGenBuffers(1, &id);
-    }
-    BufferBase(BufferBase&& other) : id(other.id) {
-        other.id = 0;
-    }
-    ~BufferBase() {
-        if (id)
-            glDeleteBuffers(1, &id);
-    }
-
     GLuint id;
+
+    BufferBase();
+    BufferBase(BufferBase&& other);
+    ~BufferBase();
+
+  private:
+    BufferBase(const BufferBase&) = delete;
 };
 
 // A collection of verticies on the GPU.
@@ -200,129 +150,123 @@ class VertexBuffer : BufferBase
     const VertexDescriptor vertexDesc_;
     size_t numVerts_;
 
-    VertexBuffer(const VertexBuffer&) = delete;
-
   public:
-    VertexBuffer(const VertexDescriptor& desc)
-      : BufferBase(), vertexDesc_(desc), numVerts_(-1)
-    {}
-    VertexBuffer(VertexBuffer&& other)
-      : BufferBase(std::forward<BufferBase>(other)),
-        vertexDesc_(other.vertexDesc_),
-        numVerts_(other.numVerts_)
-    {
-        other.numVerts_ = -1;
-    }
+    explicit VertexBuffer(const VertexDescriptor& desc);
+    VertexBuffer(VertexBuffer&& other);
 
     const VertexDescriptor& vertexDesc() const { return vertexDesc_; }
     size_t numVerts() const { return numVerts_; }
+    bool hasData() const { return numVerts_ != size_t(-1); }
 
-    void bind() const {
-        if (numVerts_ == size_t(-1))
-            throw std::runtime_error("no vertex data uploaded");
-        glBindBuffer(GL_ARRAY_BUFFER, id);
-    }
+    void bind() const;
+    static void unbind();
 
-    static void unbind() {
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
+    template <typename VertexType>
+    static std::shared_ptr<VertexBuffer> make(const std::vector<VertexType>& verts)
+    {
+        auto buf = std::make_shared<VertexBuffer>(
+                VertexDescriptor::fromType<VertexType>());
+        buf->upload(verts);
+        return buf;
     }
 
     template <typename VertexType>
-    void upload(const std::vector<VertexType>& verts) {
+    void upload(const std::vector<VertexType>& verts,
+                size_t offset = 0, size_t count = 0)
+    {
         if (vertexDesc_ != VertexDescriptor::fromType<VertexType>())
             throw std::runtime_error("attempting to upload into wrong buffer type");
-        numVerts_ = verts.size();
+        numVerts_ = count == 0
+                    ? verts.size() - offset
+                    : std::min(verts.size() - offset, count);
         glBindBuffer(GL_ARRAY_BUFFER, id);
-        glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(VertexType),
-                     &verts[0], GL_STATIC_DRAW);
-        std::cout << "uploaded " << verts.size() << " verts" << std::endl;
+        glBufferData(GL_ARRAY_BUFFER, numVerts_ * sizeof(VertexType),
+                     &verts[offset], GL_STATIC_DRAW);
+        std::cout << "uploaded " << numVerts_ << " verts (" <<
+                     (numVerts_ * sizeof(VertexType))<< " bytes)" << std::endl;
     }
+
+  private:
+    VertexBuffer(const VertexBuffer&) = delete;
 };
 
 // A collection of indexes on the GPU.
 class IndexBuffer : BufferBase
 {
     size_t numIndices_;
-
-  public:
-    IndexBuffer() : BufferBase(), numIndices_(-1) {}
-    IndexBuffer(IndexBuffer&& other)
-      : BufferBase(std::forward<BufferBase>(other)),
-        numIndices_(other.numIndices_)
-    {
-        other.numIndices_ = -1;
-    }
-
-    size_t numIndices() const { return numIndices_; }
-
-    void bind() const {
-        if (numIndices_ == size_t(-1))
-            throw std::runtime_error("no index data uploaded");
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, id);
-    }
-
-    static void unbind() {
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    }
+    GLenum type_;
 
     void upload(const std::vector<uint16_t>& indices) {
-        numIndices_ = indices.size();
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, id);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(uint16_t),
-                     &indices[0], GL_STATIC_DRAW);
-        std::cout << "uploaded " << indices.size() << " indices" << std::endl;
+        type_ = GL_UNSIGNED_SHORT;
+        upload(&indices[0], indices.size());
     }
-};
+    void upload(const std::vector<uint32_t>& indices) {
+        type_ = GL_UNSIGNED_INT;
+        numIndices_ = indices.size();
+        bind();
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices_ * sizeof(uint32_t),
+                     &indices[0], GL_STATIC_DRAW);
+        std::cout << "uploaded " << numIndices_ << " indices (" <<
+                     (4 * numIndices_)<< " bytes)" << std::endl;
+    }
 
-// A collection of buffers suitable for drawing a thing.
-class PrimitiveData
-{
-    VertexBuffer vb;
-    IndexBuffer ib;
-    GLenum primitiveKind;
-
-    PrimitiveData(const PrimitiveData&) = delete;
+    void upload(const uint16_t* indices, const size_t numIndices) {
+        numIndices_ = numIndices;
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, id);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices * sizeof(uint16_t),
+                     &indices[0], GL_STATIC_DRAW);
+        std::cout << "uploaded " << numIndices_ << " indices (" <<
+                     (2 * numIndices_)<< " bytes)" << std::endl;
+    }
 
   public:
-    PrimitiveData(GLenum kind, VertexBuffer&& v, IndexBuffer&& i)
-      : vb(std::forward<VertexBuffer>(v)),
-        ib(std::forward<IndexBuffer>(i)),
-        primitiveKind(kind)
-    {}
-    PrimitiveData(PrimitiveData&& other)
-      : vb(std::forward<VertexBuffer>(other.vb)),
-        ib(std::forward<IndexBuffer>(other.ib)),
-        primitiveKind(other.primitiveKind)
-    {
-        other.primitiveKind = -1;
-    }
+    IndexBuffer();
+    IndexBuffer(IndexBuffer&& other);
 
-    const VertexBuffer& vertexBuffer() const { return vb; }
+    size_t numIndices() const { return numIndices_; }
+    bool hasData() const { return numIndices_ != size_t(-1); }
+    GLenum type() const { return type_; }
 
-    void bind() const {
-        vb.bind();
-        ib.bind();
-    }
+    void bind() const;
+    static void unbind();
 
-    void unbind() const {
-        ib.unbind();
-        vb.unbind();
-    }
-
-    void draw() const {
-        glDrawElements(primitiveKind, ib.numIndices(), GL_UNSIGNED_SHORT, 0);
+    template <typename IntType>
+    static std::shared_ptr<IndexBuffer> make(const std::vector<IntType>& indices) {
+        auto buf = std::make_shared<IndexBuffer>();
+        buf->upload(indices);
+        return buf;
     }
 };
 
+template <typename BufferType>
+class AutoBindBuffer
+{
+    const BufferType& buffer;
+
+  public:
+    AutoBindBuffer(const BufferType& buf)
+      : buffer(buf)
+    {
+        buffer.bind();
+    }
+    ~AutoBindBuffer() {
+        buffer.unbind();
+    }
+};
+
+using AutoBindVertexBuffer = AutoBindBuffer<VertexBuffer>;
+using AutoBindIndexBuffer = AutoBindBuffer<IndexBuffer>;
+
+template <typename MeshType>
 class AutoBindPrimitiveData
 {
     AutoBindPrimitiveData(AutoBindPrimitiveData&&) = delete;
     AutoBindPrimitiveData(const AutoBindPrimitiveData&) = delete;
 
-    const PrimitiveData& primitive;
+    const MeshType& primitive;
 
   public:
-    AutoBindPrimitiveData(const PrimitiveData& p) : primitive(p) { primitive.bind(); }
+    AutoBindPrimitiveData(const MeshType& p) : primitive(p) { primitive.bind(); }
     ~AutoBindPrimitiveData() { primitive.unbind(); }
 };
 
