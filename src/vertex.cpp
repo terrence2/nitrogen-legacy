@@ -143,3 +143,18 @@ glit::IndexBuffer::unbind()
 {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
+
+void
+glit::IndexBuffer::orphan()
+{
+    size_t size = 1;
+    if (type_ == GL_UNSIGNED_SHORT)
+        size = sizeof(uint16_t);
+    else if (type_ == GL_UNSIGNED_INT)
+        size = sizeof(uint32_t);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, id);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices_ * size,
+                 nullptr, GL_STATIC_DRAW);
+    numIndices_ = -1;
+}

@@ -56,7 +56,7 @@ class BaseShader
     BaseShader(const BaseShader&) = delete;
 
   public:
-    BaseShader(const char* source);
+    BaseShader(std::string source);
     BaseShader(BaseShader&& other);
     ~BaseShader();
 };
@@ -70,6 +70,8 @@ class VertexShader : public BaseShader<GL_VERTEX_SHADER>
     const VertexDescriptor vertexDesc;
 
     VertexShader(const VertexShader&) = delete;
+
+    std::string bundleImports(const char* source);
 
   public:
     VertexShader(const char* source, const VertexDescriptor& desc);

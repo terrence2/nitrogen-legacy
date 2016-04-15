@@ -65,8 +65,11 @@ glit::Terrain::subdivideFacet(vec3 p0, vec3 p1, vec3 p2,
 }
 
 glit::Terrain::Terrain(float r)
-  : programPoints(makePointsProgram()),
-    radius(r)
+  : programPoints(makePointsProgram())
+  , wireframeMesh(Drawable(pointsProgram(), GL_LINES,
+           make_shared<VertexBuffer>(VertexDescriptor::fromType<Facet::Vertex>()),
+           make_shared<IndexBuffer>()))
+  , radius(r)
 {
     // Compute the subdivision distances from the table.
     for (size_t i = 0; i < util::ArrayLength(SubdivisionDistance); ++i) {
@@ -79,37 +82,17 @@ glit::Terrain::Terrain(float r)
     IcoSphere sphere(0);
     size_t i = 0;
     for (auto& v : sphere.vertices()) {
-        verts.push_back(Facet::Vertex{radius * v.aPosition});
+        baseVerts.push_back(Facet::Vertex{radius * v.aPosition});
         ++i;
     }
 
     i = 0;
     for (auto& face : sphere.faceList()) {
-        facets[i].verts[0] = &verts[get<0>(face)];
-        facets[i].verts[1] = &verts[get<1>(face)];
-        facets[i].verts[2] = &verts[get<2>(face)];
+        facets[i].verts[0] = &baseVerts[get<0>(face)];
+        facets[i].verts[1] = &baseVerts[get<1>(face)];
+        facets[i].verts[2] = &baseVerts[get<2>(face)];
         ++i;
     }
-
-    /*
-    for (size_t i = 0; i < 20; ++i) {
-        facets[i].parent = nullptr;
-        facets[i].ownVerts[0].aPosition = radius * sphere.faceVertexPosition<0>(i);
-        facets[i].ownVerts[1].aPosition = radius * sphere.faceVertexPosition<1>(i);
-        facets[i].ownVerts[2].aPosition = radius * sphere.faceVertexPosition<2>(i);
-        facets[i].verts[0] = &facets[i].ownVerts[0];
-        facets[i].verts[1] = &facets[i].ownVerts[1];
-        facets[i].verts[2] = &facets[i].ownVerts[2];
-        facets[i].childNumber = -i;
-    }
-    // Seed the facets from the icosphere corners.
-    for (size_t i = 0; i < 20; ++i) {
-        subdivideFacet(&facets[i],
-                       radius * sphere.faceVertexPosition<0>(i),
-                       radius * sphere.faceVertexPosition<1>(i),
-                       radius * sphere.faceVertexPosition<2>(i));
-    }
-    */
 }
 
 /* static */ shared_ptr<glit::Program>
@@ -118,13 +101,19 @@ glit::Terrain::makePointsProgram()
     auto VertexDesc = VertexDescriptor::fromType<Facet::Vertex>();
     VertexShader vs(
             R"SHADER(
+            #include <noise2D.glsl>
             precision highp float;
             uniform mat4 uModelViewProj;
             attribute vec3 aPosition;
             varying vec4 vColor;
             void main()
             {
-                gl_Position = uModelViewProj * vec4(aPosition, 1.0f);
+                float baseHeight = length(aPosition);
+                vec3 dir = aPosition / baseHeight;
+                vec2 polar = vec2(asin(dir.y), atan(dir.x, dir.z));
+                float aslHeight = snoise(polar) * 100.f;
+                vec4 adjusted = vec4(dir * (baseHeight + aslHeight), 1.0f);
+                gl_Position = uModelViewProj * adjusted;
                 vColor = vec4(255, 255, 255, 255);
             }
             )SHADER",
@@ -172,10 +161,12 @@ glit::Terrain::heightAt(vec3 pos)
     return radius;
 }
 
-glit::Mesh
+glit::Mesh*
 glit::Terrain::uploadAsWireframe(vec3 viewPosition,
                                  vec3 viewDirection)
 {
+    wireframeMesh.drawable(0).vertexBuffer()->orphan<Facet::Vertex>();
+    wireframeMesh.drawable(0).indexBuffer()->orphan();
 
     vector<Facet::Vertex> verts;
     vector<uint32_t> indices;
@@ -188,14 +179,13 @@ glit::Terrain::uploadAsWireframe(vec3 viewPosition,
 
     {
         util::Timer t("Terrain::upload");
-        unordered_map<Facet::Vertex*, uint32_t> vmap;
         for (size_t i = 0; i < 20; ++i)
-            drawSubtree(facets[i], verts, indices, vmap);
+            drawSubtree(facets[i], verts, indices);
     }
 
-    auto vb = VertexBuffer::make(verts);
-    auto ib = IndexBuffer::make(indices);
-    return Mesh(Drawable(pointsProgram(), GL_LINES, move(vb), move(ib)));
+    wireframeMesh.drawable(0).vertexBuffer()->upload(verts);
+    wireframeMesh.drawable(0).indexBuffer()->upload(indices);
+    return &wireframeMesh;
 }
 
 void
@@ -273,14 +263,13 @@ glit::Terrain::pushVertex(Facet::Vertex* insert, vector<Facet::Vertex>& verts)
 void
 glit::Terrain::drawSubtree(Facet& facet,
                            vector<Facet::Vertex>& verts,
-                           vector<uint32_t>& indices,
-                           unordered_map<Facet::Vertex*, uint32_t> vmap) const
+                           vector<uint32_t>& indices) const
 {
     if (facet.children) {
-        drawSubtree(facet.children[0], verts, indices, vmap);
-        drawSubtree(facet.children[1], verts, indices, vmap);
-        drawSubtree(facet.children[2], verts, indices, vmap);
-        drawSubtree(facet.children[3], verts, indices, vmap);
+        drawSubtree(facet.children[0], verts, indices);
+        drawSubtree(facet.children[1], verts, indices);
+        drawSubtree(facet.children[2], verts, indices);
+        drawSubtree(facet.children[3], verts, indices);
     } else {
         uint32_t i0 = pushVertex(facet.verts[0], verts);
         uint32_t i1 = pushVertex(facet.verts[1], verts);

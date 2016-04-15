@@ -39,6 +39,14 @@ class Drawable
              size_t start = 0, size_t count = 0);
     Drawable(Drawable&& other);
 
+    std::shared_ptr<VertexBuffer> vertexBuffer() const {
+        return vb;
+    }
+
+    std::shared_ptr<IndexBuffer> indexBuffer() const {
+        return ib;
+    }
+
     template <typename ...Args>
     void draw(Args&&... args) const {
         AutoBindVertexBuffer vbind(*vb);
@@ -65,6 +73,8 @@ class Mesh
     Mesh();
     explicit Mesh(Drawable&& d);
     explicit Mesh(std::vector<Drawable>&& ds);
+
+    Drawable& drawable(size_t offset) { return drawables[offset]; }
 
     template <typename ...Args>
     void draw(Args&&... args) const {

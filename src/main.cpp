@@ -180,7 +180,7 @@ class Planet : public Entity
 
         auto mesh = terrain.uploadAsWireframe(poip->position,
                                               poip->view_direction);
-        mesh.draw(modelviewproj);
+        mesh->draw(modelviewproj);
     }
 };
 

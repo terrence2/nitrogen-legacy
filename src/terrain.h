@@ -34,14 +34,15 @@ class Terrain
   public:
     Terrain(float r);
     //Mesh uploadAsPoints() const;
-    Mesh uploadAsWireframe(glm::vec3 pointOfInterest,
-                           glm::vec3 viewDirection);
+    Mesh* uploadAsWireframe(glm::vec3 pointOfInterest,
+                            glm::vec3 viewDirection);
 
     std::shared_ptr<Program> pointsProgram() const { return programPoints; }
 
   private:
     std::shared_ptr<Program> programPoints;
     static std::shared_ptr<Program> makePointsProgram();
+    Mesh wireframeMesh;
 
 
     // A facet is the subdividable piece of the terrain.
@@ -92,8 +93,7 @@ class Terrain
             memset(this, 0, sizeof(Facet));
         }
     };
-    std::vector<Facet::Vertex> verts;
-    std::shared_ptr<Mesh> mesh;
+    std::vector<Facet::Vertex> baseVerts;
 
 
 
@@ -168,8 +168,7 @@ class Terrain
     // joining tris as necessary between levels.
     void drawSubtree(Facet& facet,
                      std::vector<Facet::Vertex>& verts,
-                     std::vector<uint32_t>& indices,
-                     std::unordered_map<Facet::Vertex*, uint32_t> vmap) const;
+                     std::vector<uint32_t>& indices) const;
 
     // Given a list of indices, max draw sized index buffer.
     static std::shared_ptr<IndexBuffer> makeMaxIndexBuffer(const uint16_t* Indices,

@@ -162,6 +162,14 @@ class VertexBuffer : BufferBase
     static void unbind();
 
     template <typename VertexType>
+    void orphan() {
+        glBindBuffer(GL_ARRAY_BUFFER, id);
+        glBufferData(GL_ARRAY_BUFFER, numVerts_ * sizeof(VertexType),
+                     nullptr, GL_STATIC_DRAW);
+        numVerts_ = -1;
+    }
+
+    template <typename VertexType>
     static std::shared_ptr<VertexBuffer> make(const std::vector<VertexType>& verts)
     {
         auto buf = std::make_shared<VertexBuffer>(
@@ -196,29 +204,6 @@ class IndexBuffer : BufferBase
     size_t numIndices_;
     GLenum type_;
 
-    void upload(const std::vector<uint16_t>& indices) {
-        type_ = GL_UNSIGNED_SHORT;
-        upload(&indices[0], indices.size());
-    }
-    void upload(const std::vector<uint32_t>& indices) {
-        type_ = GL_UNSIGNED_INT;
-        numIndices_ = indices.size();
-        bind();
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices_ * sizeof(uint32_t),
-                     &indices[0], GL_STATIC_DRAW);
-        std::cout << "uploaded " << numIndices_ << " indices (" <<
-                     (4 * numIndices_)<< " bytes)" << std::endl;
-    }
-
-    void upload(const uint16_t* indices, const size_t numIndices) {
-        numIndices_ = numIndices;
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, id);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices * sizeof(uint16_t),
-                     &indices[0], GL_STATIC_DRAW);
-        std::cout << "uploaded " << numIndices_ << " indices (" <<
-                     (2 * numIndices_)<< " bytes)" << std::endl;
-    }
-
   public:
     IndexBuffer();
     IndexBuffer(IndexBuffer&& other);
@@ -229,12 +214,33 @@ class IndexBuffer : BufferBase
 
     void bind() const;
     static void unbind();
+    void orphan();
 
     template <typename IntType>
     static std::shared_ptr<IndexBuffer> make(const std::vector<IntType>& indices) {
         auto buf = std::make_shared<IndexBuffer>();
         buf->upload(indices);
         return buf;
+    }
+
+    void upload(const std::vector<uint16_t>& indices) {
+        type_ = GL_UNSIGNED_SHORT;
+        numIndices_ = indices.size();
+        bind();
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices_ * sizeof(uint16_t),
+                     &indices[0], GL_STATIC_DRAW);
+        std::cout << "uploaded " << numIndices_ << " indices (" <<
+                     (2 * numIndices_)<< " bytes)" << std::endl;
+    }
+
+    void upload(const std::vector<uint32_t>& indices) {
+        type_ = GL_UNSIGNED_INT;
+        numIndices_ = indices.size();
+        bind();
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices_ * sizeof(uint32_t),
+                     &indices[0], GL_STATIC_DRAW);
+        std::cout << "uploaded " << numIndices_ << " indices (" <<
+                     (4 * numIndices_)<< " bytes)" << std::endl;
     }
 };
 

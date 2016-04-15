@@ -188,6 +188,28 @@ replace(std::string& s, const char* chars, const char repl)
     return s;
 }
 
+inline std::string
+join(std::vector<std::string> parts, std::string glue)
+{
+    size_t count = 0;
+    for (auto& part : parts)
+        count += part.size();
+    count += (parts.size() - 1) * glue.size();
+
+    std::string out;
+    out.reserve(count);
+
+    size_t i = 0;
+    for (auto& part : parts) {
+        if (i != 0)
+            out += glue;
+        out += part;
+        ++i;
+    }
+
+    return out;
+}
+
 constexpr int64_t
 ipow(int64_t base, int exp, int64_t result = 1)
 {
@@ -199,4 +221,4 @@ ipow(int64_t base, int exp, int64_t result = 1)
 }
 
 } // namespace util
- } // namespace glit
+} // namespace glit

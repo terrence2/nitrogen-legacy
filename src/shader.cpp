@@ -20,6 +20,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#include "shader_includes.h"
 #include "utility.h"
 
 using namespace std;
@@ -33,11 +34,41 @@ glit::UniformDesc::UniformDesc(const char* name, GLenum type,
   , rows_(rows)
 {}
 
+static string
+makeCompileFailureMessage(string info, string source)
+{
+    auto parts = glit::util::split(info, ':');
+    auto lineinfo = parts[1];
+    parts = glit::util::split(lineinfo, '(');
+    long lineno = strtol(parts[0].c_str(), nullptr, 10);
+    auto column = strtol(parts[1].c_str(), nullptr, 10);
+
+    stringstream ss;
+    ss << "shader compilation failed at line " << lineno <<
+              ", column: " << column << ":" << endl <<
+              info << endl << "Source was: " << endl;
+    long i = 1;
+    auto lines = glit::util::split(source, '\n');
+    for (auto& line : lines) {
+        if (labs(i - lineno) <= 5)
+            ss << i << ": " << line << endl;
+        if (i == lineno) {
+            ss << i << ": ";
+            for (long j = 0; j < (column - 1); ++j)
+                ss << "-";
+            ss << "^" << endl;
+        }
+        ++i;
+    }
+    return ss.str();
+}
+
 template <GLenum Type>
-glit::BaseShader<Type>::BaseShader(const char* source)
+glit::BaseShader<Type>::BaseShader(std::string source)
   : id(glCreateShader(Type))
 {
-    glShaderSource(id, 1, &source, nullptr);
+    const char* chars = source.c_str();
+    glShaderSource(id, 1, &chars, nullptr);
     glCompileShader(id);
 
     GLint compiled = 0;
@@ -52,8 +83,7 @@ glit::BaseShader<Type>::BaseShader(const char* source)
         unique_ptr<GLchar> info(new GLchar[log_len]);
         glGetShaderInfoLog(id, log_len, nullptr, info.get());
         glDeleteShader(id);
-        throw runtime_error(string("shader compilation failed:\n") +
-                            string(info.release()));
+        throw runtime_error(makeCompileFailureMessage(string(info.get()), source));
     }
 }
 
@@ -75,24 +105,51 @@ glit::BaseShader<Type>::~BaseShader()
 template class glit::BaseShader<GL_FRAGMENT_SHADER>;
 template class glit::BaseShader<GL_VERTEX_SHADER>;
 
+static void
+loadIncludeFile(const string& line, vector<string>& output)
+{
+    // Strip the #include (size 8).
+    string noinclude(line.begin() + 8, line.end());
+    string filename(glit::util::trim(noinclude, " <>\"\t"));
+    if (filename == string("noise2D.glsl")) {
+        output.push_back(glit::include_noise2D_glsl);
+    } else {
+        throw runtime_error(string("unknown include file: ") + filename);
+    }
+}
+
+std::string
+glit::VertexShader::bundleImports(const char* source)
+{
+    vector<string> output;
+    for (auto& line : util::split(source, '\n')) {
+        line = util::trim(line);
+        if (util::startswith(line, string("#include")))
+            loadIncludeFile(line, output);
+        else
+            output.push_back(line);
+    }
+    return util::join(output, string("\n"));
+}
+
 glit::VertexShader::VertexShader(const char* source, const VertexDescriptor& desc)
-  : Base(source),
-    vertexDesc(desc)
+  : Base(bundleImports(source))
+  , vertexDesc(desc)
 {
 }
 
 glit::VertexShader::VertexShader(VertexShader&& other)
-  : Base(forward<BaseShader>(other)),
-    vertexDesc(other.vertexDesc)
+  : Base(forward<BaseShader>(other))
+  , vertexDesc(other.vertexDesc)
 {
 }
 
 glit::Program::Program(VertexShader&& vs, FragmentShader&& fs,
                        vector<UniformDesc> inputVec /* = {} */)
-  : vertexShader(forward<VertexShader>(vs)),
-    fragmentShader(forward<FragmentShader>(fs)),
-    id(glCreateProgram()),
-    inputs(inputVec)
+  : vertexShader(forward<VertexShader>(vs))
+  , fragmentShader(forward<FragmentShader>(fs))
+  , id(glCreateProgram())
+  , inputs(inputVec)
 {
     if (!vertexShader.id)
         throw runtime_error("using moved or deleted vertex shader");
@@ -119,10 +176,10 @@ glit::Program::Program(VertexShader&& vs, FragmentShader&& fs,
 }
 
 glit::Program::Program(Program&& other)
-  : vertexShader(forward<VertexShader>(other.vertexShader)),
-    fragmentShader(forward<FragmentShader>(other.fragmentShader)),
-    id(other.id),
-    inputs(other.inputs)
+  : vertexShader(forward<VertexShader>(other.vertexShader))
+  , fragmentShader(forward<FragmentShader>(other.fragmentShader))
+  , id(other.id)
+  , inputs(other.inputs)
 {
     other.id = 0;
 }
