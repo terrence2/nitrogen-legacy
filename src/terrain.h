@@ -93,6 +93,7 @@ class Terrain
         }
     };
     std::vector<Facet::Vertex> verts;
+    std::shared_ptr<Mesh> mesh;
 
 
 
@@ -152,7 +153,7 @@ class Terrain
     void subdivideFacet(glm::vec3 p0, glm::vec3 p1, glm::vec3 p2,
                         glm::vec3* c0, glm::vec3* c1, glm::vec3* c2) const;
     void reshape(size_t level, Facet& self,
-                 glm::vec3 viewPosition, glm::vec3 viewDirection) const;
+                 glm::vec3 viewPosition, glm::vec3 viewDirection);
 
     // Given a |facet| at |level|, fill with facet's verts and recurse
     // if more detail is needed.
@@ -174,11 +175,9 @@ class Terrain
     static std::shared_ptr<IndexBuffer> makeMaxIndexBuffer(const uint16_t* Indices,
                                                            size_t numIndices);
 
-    static uint32_t
-    memoizeVertex(Facet::Vertex* insert,
-                  std::vector<Facet::Vertex>& verts,
-                  std::vector<uint32_t>& indices,
-                  std::unordered_map<Facet::Vertex*, uint32_t>& vmap);
+    static uint32_t pushVertex(Facet::Vertex* insert,
+                               std::vector<Facet::Vertex>& verts);
+    void deleteChildren(Facet& self);
 
     // The base icosohedron points and initial facets.
     Facet facets[20];

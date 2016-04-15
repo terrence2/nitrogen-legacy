@@ -172,176 +172,6 @@ glit::Terrain::heightAt(vec3 pos)
     return radius;
 }
 
-static uint32_t IndexOffsetsForTri[4][3] = {
-    { 0, 0, 0},
-    { 0, 0, 0},
-    { 0, 0, 0},
-    { 0, 0, 0}
-};
-
-glit::Terrain::Facet*
-glit::Terrain::buildDisplayVerts(uint8_t level, Facet& parent, size_t parentBase,
-                                 Facet* self, uint8_t triPosition,
-                                 vec3 viewPosition, vec3 viewDirection,
-                                 vector<Facet::Vertex>& verts,
-                                 vector<uint32_t>& indices) const
-{
-#if 0
-    // Use parent base and triPosition to look up the indices of the vertices
-    // that are shared with our parent.
-    uint32_t i0, i4, i5;
-    switch (triPosition) {
-    case 0: i0 = 0; i4 = 2; i5 = 1; break;
-    case 1: i0 = 3; i4 = 1; i5 = 2; break;
-    case 2: i0 = 2; i4 = 4; i5 = 3; break;
-    case 3: i0 = 1; i4 = 3; i5 = 5; break;
-    }
-    i0 += parentBase;
-    i4 += parentBase;
-    i5 += parentBase;
-
-    // Look up the shared vertices and use those to determine if we want to
-    // cull this subdivision or draw it.
-    // FIXME: Check our distance from the viewpoint.
-    if (level == 3) {
-        // FIXME: it's possible we could move out of range of an entire tree in
-        // a single step, so we need to recurse here.
-        if (self)
-            delete self;
-        return nullptr;
-    }
-
-    // If self does not already exist, create it now and populate its vertices.
-    if (self == nullptr) {
-        // FIXME: find a way to use unique_ptr for this.
-        self = new Facet();
-
-        // Bisect to get intermediate verticies.
-        subdivideFacet(self, verts[i0].aPosition,
-                             verts[i4].aPosition,
-                             verts[i5].aPosition);
-    }
-
-    // Load the new verts into the buffer and strip using a combination of
-    // parent base and self-base.
-    size_t base = verts.size();
-    verts.push_back(self->verts[1]);
-    verts.push_back(self->verts[2]);
-    verts.push_back(self->verts[3]);
-    uint32_t i1 = base;
-    uint32_t i2 = base + 1;
-    uint32_t i3 = base + 2;
-    for (uint32_t i : vector<uint32_t>{i0, i1,  i1, i2,  i2, i0,
-                                       i1, i3,  i3, i2,  i2, i1,
-                                       i2, i3,  i3, i4,  i4, i2,
-                                       i1, i5,  i5, i3,  i3, i1}) {
-        indices.push_back(i);
-    }
-
-    // Recurse into each child.
-    for (uint8_t j = 0; j < 4; ++j) {
-        /*
-        // The next level below this one does not have 6 verts to pull from,
-        // only 3. Some of its verts need to come from the parent and some
-        // from the grandparent.
-        //
-        auto child = buildDisplayVerts(
-                              level + 1, *self, base, self->children[j], j,
-                              viewPosition, viewDirection,
-                              verts, indices);
-        self->children[j] = child;
-        */
-        /*
-        if (!child) {
-            // If we did not subdivide, add indices for the larger tri.
-            uint32_t i0, i1, i2;
-            switch (j) {
-            case 0: i0 = 0; i1 = 2; i2 = 1; break;
-            case 1: i0 = 1; i1 = 3; i2 = 2; break;
-            case 2: i0 = 2; i1 = 3; i2 = 4; break;
-            case 3: i0 = 1; i1 = 5; i2 = 3; break;
-            }
-            indices.push_back(base + i0);
-            indices.push_back(base + i1);
-            indices.push_back(base + i1);
-            indices.push_back(base + i2);
-            indices.push_back(base + i2);
-            indices.push_back(base + i0);
-        }
-        */
-    }
-    return self;
-#endif
-    return nullptr;
-
-    // FIXME: recurse into children.
-#if 0
-    verts.insert(verts.end(),
-                 &facet.verts[0],
-                 &facet.verts[6]);
-
-    return;
-
-    // FIXME: Escape hatch until we verify that we're not gonna just dump
-    // all the verts by accident.
-    if (level > 10)
-        return;
-
-    for (size_t i = 0; i < 4; ++i) {
-        size_t i0, i1, i2;
-        switch (i) {
-        case 0: { i0 = 0; i1 = 2; i2 = 1; break; }
-        case 1: { i0 = 3; i1 = 1; i2 = 2; break; }
-        case 2: { i0 = 2; i1 = 4; i2 = 3; break; }
-        case 3: { i0 = 1; i1 = 3; i2 = 5; break; }
-        }
-
-        const vec3& v0 = facet.verts[i0].aPosition;
-        const vec3& v1 = facet.verts[i1].aPosition;
-        const vec3& v2 = facet.verts[i2].aPosition;
-
-        vec3 v0N = cross(v1 - v0, v2 - v0);
-        float ang = dot(v0 - pointOfInterest, v0N);
-        /*
-        if (ang > 0)
-            continue;
-        */
-
-        // We can pick any vertex for each child: the distances should be
-        // calibrated such that it doesn't matter that much. We want to
-        // use the fewest number of vertices so we pick 0 and 3 as we only
-        // need two for that configuration.
-        vec3 direct = v0 - pointOfInterest;
-        float d2 = direct.x * direct.x +
-                   direct.y * direct.y +
-                   direct.z * direct.z;
-        bool inRange = d2 < SubdivisionRadiusSquared[level];
-
-        /*
-        cout << "At " << (int)level << " -> " << i << ": "
-            << checkVert << " to " << pointOfInterest << " => "
-            << sqrt(d2) << " <? "
-            << sqrt(SubdivisionRadiusSquared[level])
-            << ": " << inRange << endl;
-        */
-
-        if (!inRange && facet.children[i]) {
-            delete facet.children[i];
-            facet.children[i] = nullptr;
-        } else if (inRange && !facet.children[i]) {
-            facet.children[i] = new Facet();
-            subdivideFacet(facet.children[i], v0, v1, v2);
-        }
-
-        if (inRange) {
-            buildDisplayVerts(level + 1, &facet, *facet.children[i],
-                              pointOfInterest, viewDirection,
-                              verts, indices);
-        }
-    }
-#endif
-}
-
 glit::Mesh
 glit::Terrain::uploadAsWireframe(vec3 viewPosition,
                                  vec3 viewDirection)
@@ -369,12 +199,34 @@ glit::Terrain::uploadAsWireframe(vec3 viewPosition,
 }
 
 void
-glit::Terrain::reshape(size_t level, Facet& self,
-                       vec3 viewPosition, vec3 viewDirection) const
+glit::Terrain::deleteChildren(Facet& self)
 {
+    if (self.children) {
+        for (size_t i = 0; i < 4; ++i)
+            deleteChildren(self.children[i]);
+        delete [] self.children;
+    }
+}
+
+void
+glit::Terrain::reshape(size_t level, Facet& self,
+                       vec3 viewPosition, vec3 viewDirection)
+{
+    vec3 center = (self.verts[0]->aPosition +
+                   self.verts[1]->aPosition +
+                   self.verts[2]->aPosition) / 3.f;
+    vec3 to = center - viewPosition;
+    float dist2 = to.x * to.x + to.y * to.y + to.z * to.z;
+
     // FIXME: do backface removal at this level.
-    if (level >= 5)
+    if (level >= 8 ||
+        dist2 > SubdivisionRadiusSquared[level])
+    {
+        if (self.children)
+            deleteChildren(self);
+        self.children = nullptr;
         return;
+    }
 
     if (!self.children) {
         // Subdivide allocate and assign verts.
@@ -402,34 +254,17 @@ glit::Terrain::reshape(size_t level, Facet& self,
         self.children[3].verts[0] = &self.childVerts[1];
         self.children[3].verts[1] = &self.childVerts[0];
         self.children[3].verts[2] = self.verts[2];
-
-        reshape(level + 1, self.children[0], viewPosition, viewDirection);
-        reshape(level + 1, self.children[1], viewPosition, viewDirection);
-        reshape(level + 1, self.children[2], viewPosition, viewDirection);
-        reshape(level + 1, self.children[3], viewPosition, viewDirection);
     }
+
+    reshape(level + 1, self.children[0], viewPosition, viewDirection);
+    reshape(level + 1, self.children[1], viewPosition, viewDirection);
+    reshape(level + 1, self.children[2], viewPosition, viewDirection);
+    reshape(level + 1, self.children[3], viewPosition, viewDirection);
 }
 
 /* static */ uint32_t
-glit::Terrain::memoizeVertex(Facet::Vertex* insert,
-                             vector<Facet::Vertex>& verts,
-                             vector<uint32_t>& indices,
-                             unordered_map<Facet::Vertex*, uint32_t>& vmap)
+glit::Terrain::pushVertex(Facet::Vertex* insert, vector<Facet::Vertex>& verts)
 {
-    /*
-    auto rv = vmap.insert(pair<Facet::Vertex*, uint32_t>(insert, -1));
-    if (rv.second) {
-        // The vert did not exist; push it onto verts and put the position into
-        // the returned iterator.
-        uint32_t i0 = verts.size();
-        verts.push_back(*insert);
-        rv.first->second = i0;
-        return i0;
-    }
-    // The vert already exists, so get it from the returned iterator.
-    return rv.first->second;
-    */
-
     uint32_t i0 = verts.size();
     verts.push_back(*insert);
     return i0;
@@ -447,9 +282,9 @@ glit::Terrain::drawSubtree(Facet& facet,
         drawSubtree(facet.children[2], verts, indices, vmap);
         drawSubtree(facet.children[3], verts, indices, vmap);
     } else {
-        uint32_t i0 = memoizeVertex(facet.verts[0], verts, indices, vmap);
-        uint32_t i1 = memoizeVertex(facet.verts[1], verts, indices, vmap);
-        uint32_t i2 = memoizeVertex(facet.verts[2], verts, indices, vmap);
+        uint32_t i0 = pushVertex(facet.verts[0], verts);
+        uint32_t i1 = pushVertex(facet.verts[1], verts);
+        uint32_t i2 = pushVertex(facet.verts[2], verts);
         indices.push_back(i0);
         indices.push_back(i1);
         indices.push_back(i1);

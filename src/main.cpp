@@ -126,7 +126,8 @@ class POI : public Entity
     void tick(double t, double dt) override {
         auto rot = rotate(mat4(1.f), 0.001f,
                 normalize(vec3(1.f, 0.f, -1.f)));
-        position = rot * vec4(position, 1.f);
+        float alt = 2.f * 6371.f + (6371.f * cosf(t / 2.7f));
+        position = rot * vec4(normalize(position) * alt, 1.f);
     }
 
     void draw(const Camera& camera) override {
