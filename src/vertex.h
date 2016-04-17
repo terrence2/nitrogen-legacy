@@ -190,8 +190,8 @@ class VertexBuffer : BufferBase
         glBindBuffer(GL_ARRAY_BUFFER, id);
         glBufferData(GL_ARRAY_BUFFER, numVerts_ * sizeof(VertexType),
                      &verts[offset], GL_STATIC_DRAW);
-        std::cout << "uploaded " << numVerts_ << " verts (" <<
-                     (numVerts_ * sizeof(VertexType))<< " bytes)" << std::endl;
+        //std::cout << "uploaded " << numVerts_ << " verts (" <<
+        //             (numVerts_ * sizeof(VertexType))<< " bytes)" << std::endl;
     }
 
   private:
@@ -229,8 +229,8 @@ class IndexBuffer : BufferBase
         bind();
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices_ * sizeof(uint16_t),
                      &indices[0], GL_STATIC_DRAW);
-        std::cout << "uploaded " << numIndices_ << " indices (" <<
-                     (2 * numIndices_)<< " bytes)" << std::endl;
+        //std::cout << "uploaded " << numIndices_ << " indices (" <<
+        //             (2 * numIndices_)<< " bytes)" << std::endl;
     }
 
     void upload(const std::vector<uint32_t>& indices) {
@@ -239,8 +239,8 @@ class IndexBuffer : BufferBase
         bind();
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices_ * sizeof(uint32_t),
                      &indices[0], GL_STATIC_DRAW);
-        std::cout << "uploaded " << numIndices_ << " indices (" <<
-                     (4 * numIndices_)<< " bytes)" << std::endl;
+        //std::cout << "uploaded " << numIndices_ << " indices (" <<
+        //             (4 * numIndices_)<< " bytes)" << std::endl;
     }
 };
 

@@ -30,6 +30,12 @@ operator<< (std::ostream &stream, const glm::vec3 &v)
     return stream << "{" << v.x << "," << v.y << "," << v.z << "}";
 }
 
+inline std::ostream&
+operator<< (std::ostream &stream, const glm::vec2 &v)
+{
+    return stream << "{" << v.x << "," << v.y << "}";
+}
+
 // Call the macro D on each string that can be passed to glGetString.
 #define FOR_EACH_GL_STRINGS(D) \
     D(GL_VERSION) \

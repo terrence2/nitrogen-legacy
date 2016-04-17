@@ -22,17 +22,26 @@ namespace glit {
 class EventDispatcher
 {
     using EventType = std::string;
-    using CallbackType = std::function<void()>;
-    using CallbacksType = std::vector<CallbackType>;
-    using ValueType = std::pair<EventType, CallbacksType>;
-    using RegistryType = std::unordered_map<EventType, CallbacksType>;
-    RegistryType events;
+
+    using EdgeCallbackType = std::function<void()>;
+    using EdgeCallbacksType = std::vector<EdgeCallbackType>;
+    using EdgeValueType = std::pair<EventType, EdgeCallbacksType>;
+    using EdgeRegistryType = std::unordered_map<EventType, EdgeCallbacksType>;
+    EdgeRegistryType edgeHandlers;
+
+    using LevelCallbackType = std::function<void(double, double)>;
+    using LevelCallbacksType = std::vector<LevelCallbackType>;
+    using LevelValueType = std::pair<EventType, LevelCallbacksType>;
+    using LevelRegistryType = std::unordered_map<EventType, LevelCallbacksType>;
+    LevelRegistryType levelHandlers;
 
   public:
     EventDispatcher() {}
     bool hasEventNamed(std::string event) const;
-    void observe(std::string event, CallbackType func);
-    void notify(std::string event) const;
+    void onEdge(std::string event, EdgeCallbackType func);
+    void onLevel(std::string event, LevelCallbackType func);
+    void notifyEdge(std::string event) const;
+    void notifyLevel(std::string event, double level, double change) const;
 };
 
 } // namespace glit

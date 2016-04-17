@@ -37,9 +37,11 @@ class Terrain
     Mesh* uploadAsWireframe(glm::vec3 pointOfInterest,
                             glm::vec3 viewDirection);
 
-    std::shared_ptr<Program> pointsProgram() const { return programPoints; }
+    float heightAt(glm::vec3 pos) const;
+    float heightAt(glm::vec2 latlon) const;
 
   private:
+    //std::shared_ptr<Program> pointsProgram() const { return programPoints; }
     std::shared_ptr<Program> programPoints;
     static std::shared_ptr<Program> makePointsProgram();
     Mesh wireframeMesh;
@@ -146,8 +148,6 @@ class Terrain
     // tree so that we only lose fine detail if we run out of room in the Facet
     // heap. This allows us to pre-allocate our entire terrain cache and avoid
     // thrashing with the rest of the system.
-
-    float heightAt(glm::vec3 pos);
 
     static glm::vec3 bisect(glm::vec3 v0, glm::vec3 v1);
     void subdivideFacet(glm::vec3 p0, glm::vec3 p1, glm::vec3 p2,

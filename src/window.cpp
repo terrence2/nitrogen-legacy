@@ -61,9 +61,16 @@ glit::Window::init()
 
     // Listen for events.
     glfwSetWindowUserPointer(window, this);
+    glfwSetCursorPosCallback(window, cursorPositionCallback);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetCursorPosCallback(window, cursorPositionCallback);
     glfwSetKeyCallback(window, keyCallback);
     glfwSetWindowCloseCallback(window, windowCloseCallback);
     glfwSetWindowSizeCallback(window, windowSizeCallback);
+
+    // Query the initial cursor position so that dx/dy are sane
+    // on our first update.
+    glfwGetCursorPos(window, &lastMouse[0], &lastMouse[1]);
 
     // Do late binding of GL primitives.
     glfwMakeContextCurrent(window);
@@ -112,6 +119,19 @@ glit::Window::keyCallback(GLFWwindow* window, int key, int scancode,
     Window* self = fromGLFW(window);
     printf("key is: %d %d %d %d\n", key, scancode, action, mods);
     self->bindings->dispatchKeyEvent(key, scancode, action, mods);
+}
+
+/* static */ void
+glit::Window::cursorPositionCallback(GLFWwindow* window,
+                                     double xpos, double ypos)
+{
+    Window* self = fromGLFW(window);
+    self->bindings->dispatchMouseMotion(xpos,
+                                        ypos,
+                                        self->lastMouse[0] - xpos,
+                                        self->lastMouse[1] - ypos);
+    self->lastMouse[0] = xpos;
+    self->lastMouse[1] = ypos;
 }
 
 /* static */ void

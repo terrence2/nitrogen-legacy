@@ -74,7 +74,7 @@ class Mesh
     explicit Mesh(Drawable&& d);
     explicit Mesh(std::vector<Drawable>&& ds);
 
-    Drawable& drawable(size_t offset) { return drawables[offset]; }
+    const Drawable& drawable(size_t offset) { return drawables[offset]; }
 
     template <typename ...Args>
     void draw(Args&&... args) const {

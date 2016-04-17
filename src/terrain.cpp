@@ -66,7 +66,7 @@ glit::Terrain::subdivideFacet(vec3 p0, vec3 p1, vec3 p2,
 
 glit::Terrain::Terrain(float r)
   : programPoints(makePointsProgram())
-  , wireframeMesh(Drawable(pointsProgram(), GL_LINES,
+  , wireframeMesh(Drawable(programPoints, GL_LINES,
            make_shared<VertexBuffer>(VertexDescriptor::fromType<Facet::Vertex>()),
            make_shared<IndexBuffer>()))
   , radius(r)
@@ -156,7 +156,13 @@ glit::Terrain::uploadAsPoints() const
 #endif
 
 float
-glit::Terrain::heightAt(vec3 pos)
+glit::Terrain::heightAt(vec3 pos) const
+{
+    return radius;
+}
+
+float
+glit::Terrain::heightAt(glm::vec2 latlon) const
 {
     return radius;
 }
@@ -168,17 +174,16 @@ glit::Terrain::uploadAsWireframe(vec3 viewPosition,
     wireframeMesh.drawable(0).vertexBuffer()->orphan<Facet::Vertex>();
     wireframeMesh.drawable(0).indexBuffer()->orphan();
 
-    vector<Facet::Vertex> verts;
-    vector<uint32_t> indices;
-
     {
-        util::Timer t("Terrain::reshape");
+        //util::Timer t("Terrain::reshape");
         for (size_t i = 0; i < 20; ++i)
             reshape(0, facets[i], viewPosition, viewDirection);
     }
 
+    vector<Facet::Vertex> verts;
+    vector<uint32_t> indices;
     {
-        util::Timer t("Terrain::upload");
+        //util::Timer t("Terrain::upload");
         for (size_t i = 0; i < 20; ++i)
             drawSubtree(facets[i], verts, indices);
     }

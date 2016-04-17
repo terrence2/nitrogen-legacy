@@ -14,37 +14,69 @@
 
 #include <iostream>
 
+using namespace std;
+
 bool
-glit::EventDispatcher::hasEventNamed(std::string event) const
+glit::EventDispatcher::hasEventNamed(string event) const
 {
-    return bool(events.count(event));
+    return bool(edgeHandlers.count(event)) ||
+           bool(levelHandlers.count(event));
 }
 
 void
-glit::EventDispatcher::observe(std::string event, CallbackType func)
+glit::EventDispatcher::onEdge(string event, EdgeCallbackType func)
 {
-    auto iter = events.find(event);
-    if (iter == events.end()) {
-        auto entry = ValueType(event, CallbacksType());
-        auto rv = events.insert(entry);
+    auto iter = edgeHandlers.find(event);
+    if (iter == edgeHandlers.end()) {
+        auto entry = EdgeValueType(event, EdgeCallbacksType());
+        auto rv = edgeHandlers.insert(entry);
         if (!rv.second)
-            throw std::runtime_error("failed to insert observer");
+            throw runtime_error("failed to insert observer");
         iter = rv.first;
     }
     iter->second.push_back(func);
 }
 
 void
-glit::EventDispatcher::notify(std::string event) const
+glit::EventDispatcher::onLevel(string event, LevelCallbackType func)
 {
-    auto pair = events.find(event);
-    if (pair == events.end()) {
-        std::cout << "trying to dispatch to nonexistant event " <<
-            event << std::endl;
+    auto iter = levelHandlers.find(event);
+    if (iter == levelHandlers.end()) {
+        auto entry = LevelValueType(event, LevelCallbacksType());
+        auto rv = levelHandlers.insert(entry);
+        if (!rv.second)
+            throw runtime_error("failed to insert observer");
+        iter = rv.first;
+    }
+    iter->second.push_back(func);
+}
+
+void
+glit::EventDispatcher::notifyEdge(string event) const
+{
+    auto pair = edgeHandlers.find(event);
+    if (pair == edgeHandlers.end()) {
+        cout << "trying to dispatch to nonexistant event " << event << endl;
         return;
     }
 
-    std::cout << "Observed event " << event << std::endl;
+    cout << "Observed event " << event << endl;
     for (auto func : pair->second)
         func();
+}
+
+void
+glit::EventDispatcher::notifyLevel(string event, double level, double change) const
+{
+    cout << "level is: " << level << " d " << change << endl;
+
+    auto pair = levelHandlers.find(event);
+    if (pair == levelHandlers.end()) {
+        cout << "trying to dispatch to nonexistant event " << event << endl;
+        return;
+    }
+
+    cout << "Observed event " << event << endl;
+    for (auto func : pair->second)
+        func(level, change);
 }
