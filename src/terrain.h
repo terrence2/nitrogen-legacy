@@ -33,18 +33,18 @@ class Terrain
 {
   public:
     Terrain(float r);
-    //Mesh uploadAsPoints() const;
-    Mesh* uploadAsWireframe(glm::vec3 pointOfInterest,
-                            glm::vec3 viewDirection);
+    ~Terrain();
+    Mesh* uploadAsWireframe(glm::vec3 viewPosition, glm::vec3 viewDirection);
+    Mesh* uploadAsTriStrips(glm::vec3 viewPosition, glm::vec3 viewDirection);
 
     float heightAt(glm::vec3 pos) const;
     float heightAt(glm::vec2 latlon) const;
 
   private:
-    //std::shared_ptr<Program> pointsProgram() const { return programPoints; }
     std::shared_ptr<Program> programPoints;
     static std::shared_ptr<Program> makePointsProgram();
     Mesh wireframeMesh;
+    Mesh tristripMesh;
 
 
     // A facet is the subdividable piece of the terrain.
@@ -75,8 +75,9 @@ class Terrain
         //        \p2/
         //         \/
         //
+
         struct Vertex {
-            // Store the verts in lat/lon for transfer to the GPU.
+            // FIXME: Store the verts in lat/lon for transfer to the GPU?
             glm::vec3 aPosition;
 
             static void describe(std::vector<VertexAttrib>& attribs) {
@@ -85,17 +86,22 @@ class Terrain
         };
         Facet* children; // 4 wide
 
-        Vertex* verts[3];
+        struct VertexAndIndex {
+            Vertex vertex;   // Refers to baseVerts or childVerts.
+            uint32_t index;  // Reset by reshape. Invalid is -1.
+        };
+        VertexAndIndex* verts[3];
 
         // The children use a combination of our verts and pointers to verts
         // stored here.
-        Vertex childVerts[3];
+        VertexAndIndex childVerts[3];
 
         Facet() {
             memset(this, 0, sizeof(Facet));
         }
     };
-    std::vector<Facet::Vertex> baseVerts;
+
+    std::vector<Facet::VertexAndIndex> baseVerts;
 
 
 
@@ -149,11 +155,17 @@ class Terrain
     // heap. This allows us to pre-allocate our entire terrain cache and avoid
     // thrashing with the rest of the system.
 
+    // Each subdivision doubles angular resulution. Provide a LUT to get
+    // this resolution for any given level.
+    //float levelAngles[25];
+    //static void buildLevelAngles(float angle0) const;
+
     static glm::vec3 bisect(glm::vec3 v0, glm::vec3 v1);
     void subdivideFacet(glm::vec3 p0, glm::vec3 p1, glm::vec3 p2,
                         glm::vec3* c0, glm::vec3* c1, glm::vec3* c2) const;
-    void reshape(size_t level, Facet& self,
-                 glm::vec3 viewPosition, glm::vec3 viewDirection);
+    void reshape(glm::vec3 viewPosition, glm::vec3 viewDirection);
+    void reshapeN(size_t level, Facet& self,
+                  glm::vec3 viewPosition, glm::vec3 viewDirection);
 
     // Given a |facet| at |level|, fill with facet's verts and recurse
     // if more detail is needed.
@@ -166,15 +178,19 @@ class Terrain
     // Given that the tree has already been balanced for the active view,
     // walk current tree and emit verticies for all active children, inserting
     // joining tris as necessary between levels.
-    void drawSubtree(Facet& facet,
-                     std::vector<Facet::Vertex>& verts,
-                     std::vector<uint32_t>& indices) const;
+    void drawSubtreeTriStrip(std::vector<Facet::Vertex>& verts,
+                             std::vector<uint32_t>& indices);
+    void drawSubtreeTriStripN(Facet& facet,
+                              std::vector<Facet::Vertex>& verts,
+                              std::vector<uint32_t>& indices) const;
 
-    // Given a list of indices, max draw sized index buffer.
-    static std::shared_ptr<IndexBuffer> makeMaxIndexBuffer(const uint16_t* Indices,
-                                                           size_t numIndices);
+    // Spit out complete triangles for all faces. We don't need joins because
+    // they would just overlay lines that are already present.
+    void drawSubtreeWireframe(Facet& facet,
+                              std::vector<Facet::Vertex>& verts,
+                              std::vector<uint32_t>& indices) const;
 
-    static uint32_t pushVertex(Facet::Vertex* insert,
+    static uint32_t pushVertex(Facet::VertexAndIndex* insert,
                                std::vector<Facet::Vertex>& verts);
     void deleteChildren(Facet& self);
 

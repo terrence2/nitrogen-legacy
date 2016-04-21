@@ -22,6 +22,15 @@
 using namespace std;
 using namespace glm;
 
+glit::IcoSphere::Face::Face(int a0, int a1, int a2, const std::vector<Vertex>& verts)
+  : i0(a0), i1(a1), i2(a2)
+{
+    vec3 v0 = verts[i0].aPosition;
+    vec3 v1 = verts[i1].aPosition;
+    vec3 v2 = verts[i2].aPosition;
+    normal = normalize(cross(v1 - v0, v2 - v0));
+}
+
 glit::IcoSphere::IcoSphere(int iterations)
   : programPoints(makePointsProgram())
 {
@@ -43,42 +52,42 @@ glit::IcoSphere::IcoSphere(int iterations)
     verts.push_back(Vertex{normalize(vec3(-t,  0.f,  1.f))});
 
     // 5 faces around point 0
-    faces.push_back(Face(0, 11, 5));
-    faces.push_back(Face(0, 5, 1));
-    faces.push_back(Face(0, 1, 7));
-    faces.push_back(Face(0, 7, 10));
-    faces.push_back(Face(0, 10, 11));
+    faces.push_back(Face(0, 11, 5, verts));
+    faces.push_back(Face(0, 5, 1, verts));
+    faces.push_back(Face(0, 1, 7, verts));
+    faces.push_back(Face(0, 7, 10, verts));
+    faces.push_back(Face(0, 10, 11, verts));
 
     // 5 adjacent faces
-    faces.push_back(Face(1, 5, 9));
-    faces.push_back(Face(5, 11, 4));
-    faces.push_back(Face(11, 10, 2));
-    faces.push_back(Face(10, 7, 6));
-    faces.push_back(Face(7, 1, 8));
+    faces.push_back(Face(1, 5, 9, verts));
+    faces.push_back(Face(5, 11, 4, verts));
+    faces.push_back(Face(11, 10, 2, verts));
+    faces.push_back(Face(10, 7, 6, verts));
+    faces.push_back(Face(7, 1, 8, verts));
 
     // 5 faces around point 3
-    faces.push_back(Face(3, 9, 4));
-    faces.push_back(Face(3, 4, 2));
-    faces.push_back(Face(3, 2, 6));
-    faces.push_back(Face(3, 6, 8));
-    faces.push_back(Face(3, 8, 9));
+    faces.push_back(Face(3, 9, 4, verts));
+    faces.push_back(Face(3, 4, 2, verts));
+    faces.push_back(Face(3, 2, 6, verts));
+    faces.push_back(Face(3, 6, 8, verts));
+    faces.push_back(Face(3, 8, 9, verts));
 
     // 5 adjacent faces
-    faces.push_back(Face(4, 9, 5));
-    faces.push_back(Face(2, 4, 11));
-    faces.push_back(Face(6, 2, 10));
-    faces.push_back(Face(8, 6, 7));
-    faces.push_back(Face(9, 8, 1));
+    faces.push_back(Face(4, 9, 5, verts));
+    faces.push_back(Face(2, 4, 11, verts));
+    faces.push_back(Face(6, 2, 10, verts));
+    faces.push_back(Face(8, 6, 7, verts));
+    faces.push_back(Face(9, 8, 1, verts));
 
     for (int i = 0; i < iterations; ++i) {
         Faces nextFaces;
         for (Face& face : faces) {
-            vec3 a = normalize(bisectEdge(verts[get<0>(face)].aPosition,
-                                          verts[get<1>(face)].aPosition));
-            vec3 b = normalize(bisectEdge(verts[get<1>(face)].aPosition,
-                                          verts[get<2>(face)].aPosition));
-            vec3 c = normalize(bisectEdge(verts[get<2>(face)].aPosition,
-                                          verts[get<0>(face)].aPosition));
+            vec3 a = normalize(bisectEdge(verts[face.i0].aPosition,
+                                          verts[face.i1].aPosition));
+            vec3 b = normalize(bisectEdge(verts[face.i1].aPosition,
+                                          verts[face.i2].aPosition));
+            vec3 c = normalize(bisectEdge(verts[face.i2].aPosition,
+                                          verts[face.i0].aPosition));
             uint16_t ia = verts.size();
             verts.push_back(Vertex{a});
             uint16_t ib = verts.size();
@@ -86,10 +95,10 @@ glit::IcoSphere::IcoSphere(int iterations)
             uint16_t ic = verts.size();
             verts.push_back(Vertex{c});
 
-            nextFaces.push_back(Face(get<0>(face), ia, ic));
-            nextFaces.push_back(Face(get<1>(face), ib, ia));
-            nextFaces.push_back(Face(get<2>(face), ic, ib));
-            nextFaces.push_back(Face(ia, ib, ic));
+            nextFaces.push_back(Face(face.i0, ia, ic, verts));
+            nextFaces.push_back(Face(face.i1, ib, ia, verts));
+            nextFaces.push_back(Face(face.i2, ic, ib, verts));
+            nextFaces.push_back(Face(ia, ib, ic, verts));
         }
         faces = nextFaces;
     }
@@ -152,12 +161,12 @@ glit::IcoSphere::uploadAsWireframe() const
 
     vector<uint16_t> indices;
     for (auto& face : faces) {
-        indices.push_back(get<0>(face));
-        indices.push_back(get<1>(face));
-        indices.push_back(get<1>(face));
-        indices.push_back(get<2>(face));
-        indices.push_back(get<2>(face));
-        indices.push_back(get<0>(face));
+        indices.push_back(face.i0);
+        indices.push_back(face.i1);
+        indices.push_back(face.i1);
+        indices.push_back(face.i2);
+        indices.push_back(face.i2);
+        indices.push_back(face.i0);
     }
     auto ib = IndexBuffer::make(indices);
 

@@ -49,12 +49,15 @@ class Window
     void setCurrentBindings(InputBindings& inputs) { bindings = &inputs; }
     void swap();
 
+  private:
     static Window* fromGLFW(GLFWwindow* window);
     static void errorCallback(int error, const char* description);
     static void keyCallback(GLFWwindow* window, int key, int scancode,
                             int action, int mods);
     static void cursorPositionCallback(GLFWwindow* window,
                                        double xpos, double ypos);
+    static void mouseScrollCallback(GLFWwindow* window,
+                                    double xpos, double ypos);
     static void windowCloseCallback(GLFWwindow* window);
     static void windowSizeCallback(GLFWwindow* window, int width, int height);
 };

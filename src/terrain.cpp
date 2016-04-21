@@ -25,7 +25,7 @@ using namespace std;
 const /* static */ float
 glit::Terrain::SubdivisionDistance[glit::Terrain::MaxSubdivisions] = {
     numeric_limits<float>::infinity(), // Always shown.
-    5.f,  // 80 tris looks really blocky, so show more even pretty far out.
+    numeric_limits<float>::infinity(),  // 80 tris looks really blocky, so show more even pretty far out.
     2.f,
     1.f,
     1.f / float(1 << 1),
@@ -69,6 +69,9 @@ glit::Terrain::Terrain(float r)
   , wireframeMesh(Drawable(programPoints, GL_LINES,
            make_shared<VertexBuffer>(VertexDescriptor::fromType<Facet::Vertex>()),
            make_shared<IndexBuffer>()))
+  , tristripMesh(Drawable(programPoints, GL_TRIANGLE_STRIP,
+           make_shared<VertexBuffer>(VertexDescriptor::fromType<Facet::Vertex>()),
+           make_shared<IndexBuffer>()))
   , radius(r)
 {
     // Compute the subdivision distances from the table.
@@ -82,17 +85,24 @@ glit::Terrain::Terrain(float r)
     IcoSphere sphere(0);
     size_t i = 0;
     for (auto& v : sphere.vertices()) {
-        baseVerts.push_back(Facet::Vertex{radius * v.aPosition});
+        baseVerts.push_back(Facet::VertexAndIndex{{radius * v.aPosition},
+                                                  uint32_t(-1)});
         ++i;
     }
 
     i = 0;
     for (auto& face : sphere.faceList()) {
-        facets[i].verts[0] = &baseVerts[get<0>(face)];
-        facets[i].verts[1] = &baseVerts[get<1>(face)];
-        facets[i].verts[2] = &baseVerts[get<2>(face)];
+        facets[i].verts[0] = &baseVerts[face.i0];
+        facets[i].verts[1] = &baseVerts[face.i1];
+        facets[i].verts[2] = &baseVerts[face.i2];
         ++i;
     }
+}
+
+glit::Terrain::~Terrain()
+{
+    for (auto& facet : facets)
+        deleteChildren(facet);
 }
 
 /* static */ shared_ptr<glit::Program>
@@ -101,34 +111,140 @@ glit::Terrain::makePointsProgram()
     auto VertexDesc = VertexDescriptor::fromType<Facet::Vertex>();
     VertexShader vs(
             R"SHADER(
-            #include <noise2D.glsl>
+            ///////////////////////////////////////////////////////////////////
             precision highp float;
             uniform mat4 uModelViewProj;
+            uniform vec3 uCameraPosition;
             attribute vec3 aPosition;
-            varying vec4 vColor;
+            varying vec3 vColor;
+            varying vec2 vLatLon;
+            varying vec3 vNormal;
+
+            const float PI = 3.1415925;
+            const float NormalSampleScale = PI / 16.0 / 6371.0;
+            const float HeightScale = 1000.0;
+
+            #include <noise2D.glsl>
+
+            float fbm(vec2 pos, int octaves, float lacunarity, float gain) {
+                float sum = 0.0;
+                float freq = 1.0;
+                float amp = 0.5;
+                for (int i = 0; i < octaves; ++i) {
+                    float n = snoise(pos * freq);
+                    sum += n * amp;
+                    freq *= lacunarity;
+                    amp *= gain;
+                }
+                return sum;
+            }
+
+            vec2 polar(vec3 dir) {
+                return vec2(asin(dir.y), atan(dir.x, dir.z));
+            }
+
+            vec3 heightAt(vec2 latlon, vec3 dir, float radius) {
+                float adjustment = snoise(latlon) * HeightScale;
+                //float adjustment = fbm(latlon, 6, 2.0, 1.0);
+                return dir * (radius + adjustment);
+            }
+
+            // create a quaternion from an angle and axis.
+            vec4 angleAxis(float angle, vec3 axis) {
+                float s = sin(angle * 0.5);
+                return vec4(axis.x * s,
+                            axis.y * s,
+                            axis.z * s,
+                            cos(angle * 0.5));
+            }
+
+            vec3 quatRotate(vec4 quat, vec3 v) {
+                vec3 QuatVector = quat.xyz;
+                vec3 uv = cross(QuatVector, v);
+                vec3 uuv = cross(QuatVector, uv);
+                return v + ((uv * quat.w) + uuv) * 2.0;
+            }
+
+            vec3 heightAtOffset(vec3 dir, vec3 perp, float angle, float radius) {
+                vec3 base = normalize(dir + (tan(angle) * perp));
+                return heightAt(polar(base), base, radius);
+            }
+
             void main()
             {
-                float baseHeight = length(aPosition);
-                vec3 dir = aPosition / baseHeight;
-                vec2 polar = vec2(asin(dir.y), atan(dir.x, dir.z));
-                float aslHeight = snoise(polar) * 100.f;
-                vec4 adjusted = vec4(dir * (baseHeight + aslHeight), 1.0f);
-                gl_Position = uModelViewProj * adjusted;
-                vColor = vec4(255, 255, 255, 255);
+                float radius = length(aPosition);
+                vec3 posDir = aPosition / radius;
+                vec2 posLatLon = polar(posDir);
+                vec3 pos = heightAt(posLatLon, posDir, radius);
+
+                // We need to sample around the point to derive a normal.
+                //
+                // We want to sample such that transitions are smooth per-pixel,
+                // but we don't know about pixels. Answer: use the distance from
+                // the world-space position to the camera to derive approximately
+                // how much screen real-estate is taken by the vertex's fragments.
+                //
+                // FIXME: we could probably take this from the depth buffer.
+                //  The value we get here is transformed: (z/w+1)/2
+                //    float depth = texture2D( depthBuf, texCoords ).r;
+                float dist = length(pos - uCameraPosition);
+
+                // We'll need to experiment with the ratio.
+                // ang should get smaller as dist gets smaller.
+                // at dist of 6371, we have like 40 tris... so like... PI/8?... ish?
+                // so something like: 6371.0 : PI/8 :: dist : ???
+                float ang = dist * NormalSampleScale;
+
+                // Find a vector perpendicular to dir at position.
+                // Note that we don't really care about the direction.
+                vec3 perp;
+                if (abs(dot(posDir, vec3(0.0, 1.0, 0.0))) > 0.1) {
+                    perp = normalize(cross(posDir, vec3(1.0, 0.0, 0.0)));
+                } else {
+                    perp = normalize(cross(posDir, vec3(0.0, 1.0, 0.0)));
+                }
+
+                // Get 3 positions around pos at 120 degree angles.
+                vec4 rot = angleAxis(radians(120.0), posDir);
+                vec3 v0 = heightAtOffset(posDir, perp, ang, radius);
+                perp = quatRotate(rot, perp);
+                vec3 v1 = heightAtOffset(posDir, perp, ang, radius);
+                perp = quatRotate(rot, perp);
+                vec3 v2 = heightAtOffset(posDir, perp, ang, radius);
+
+                vec3 vFace0N = normalize(cross(v0 - pos, v1 - pos));
+                vec3 vFace1N = normalize(cross(v1 - pos, v2 - pos));
+                vec3 vFace2N = normalize(cross(v2 - pos, v0 - pos));
+
+                gl_Position = uModelViewProj * vec4(pos, 1.0);
+                vColor = vec3(1.0);
+                vNormal = normalize((vFace0N + vFace1N + vFace2N) / 3.0);
+                vLatLon = posLatLon;
             }
+            ///////////////////////////////////////////////////////////////////
             )SHADER",
             VertexDesc);
     FragmentShader fs(
             R"SHADER(
+            ///////////////////////////////////////////////////////////////////
             precision highp float;
-            varying vec4 vColor;
+            const float PI = 3.1415925;
+            uniform vec3 uSunDirection;
+            varying vec2 vLatLon;
+            varying vec3 vNormal;
+            varying vec3 vColor;
+
             void main() {
-                gl_FragColor = vColor;
+                float diffuse = dot(vNormal, -uSunDirection);
+                gl_FragColor = vec4(vColor * diffuse, 1.0);
             }
+            ///////////////////////////////////////////////////////////////////
             )SHADER"
         );
     return make_shared<Program>(move(vs), move(fs), vector<UniformDesc>{
                 Program::MakeInput<mat4>("uModelViewProj"),
+                Program::MakeInput<mat4>("uCameraPosition"),
+                Program::MakeInput<vec3>("uSunDirection"),
             });
 }
 
@@ -174,23 +290,37 @@ glit::Terrain::uploadAsWireframe(vec3 viewPosition,
     wireframeMesh.drawable(0).vertexBuffer()->orphan<Facet::Vertex>();
     wireframeMesh.drawable(0).indexBuffer()->orphan();
 
-    {
-        //util::Timer t("Terrain::reshape");
-        for (size_t i = 0; i < 20; ++i)
-            reshape(0, facets[i], viewPosition, viewDirection);
-    }
+    reshape(viewPosition, viewDirection);
 
     vector<Facet::Vertex> verts;
     vector<uint32_t> indices;
     {
         //util::Timer t("Terrain::upload");
         for (size_t i = 0; i < 20; ++i)
-            drawSubtree(facets[i], verts, indices);
+            drawSubtreeWireframe(facets[i], verts, indices);
     }
 
     wireframeMesh.drawable(0).vertexBuffer()->upload(verts);
     wireframeMesh.drawable(0).indexBuffer()->upload(indices);
     return &wireframeMesh;
+}
+
+glit::Mesh*
+glit::Terrain::uploadAsTriStrips(vec3 viewPosition,
+                                 vec3 viewDirection)
+{
+    tristripMesh.drawable(0).vertexBuffer()->orphan<Facet::Vertex>();
+    tristripMesh.drawable(0).indexBuffer()->orphan();
+
+    reshape(viewPosition, viewDirection);
+
+    vector<Facet::Vertex> verts;
+    vector<uint32_t> indices;
+    drawSubtreeTriStrip(verts, indices);
+
+    tristripMesh.drawable(0).vertexBuffer()->upload(verts);
+    tristripMesh.drawable(0).indexBuffer()->upload(indices);
+    return &tristripMesh;
 }
 
 void
@@ -204,12 +334,26 @@ glit::Terrain::deleteChildren(Facet& self)
 }
 
 void
-glit::Terrain::reshape(size_t level, Facet& self,
+glit::Terrain::reshape(vec3 viewPosition, vec3 viewDirection)
+{
+    for (auto& vert : baseVerts)
+        vert.index = uint32_t(-1);
+
+    for (size_t i = 0; i < 20; ++i)
+        reshapeN(0, facets[i], viewPosition, viewDirection);
+}
+
+void
+glit::Terrain::reshapeN(size_t level, Facet& self,
                        vec3 viewPosition, vec3 viewDirection)
 {
-    vec3 center = (self.verts[0]->aPosition +
-                   self.verts[1]->aPosition +
-                   self.verts[2]->aPosition) / 3.f;
+    self.childVerts[0].index = uint32_t(-1);
+    self.childVerts[1].index = uint32_t(-1);
+    self.childVerts[2].index = uint32_t(-1);
+
+    vec3 center = (self.verts[0]->vertex.aPosition +
+                   self.verts[1]->vertex.aPosition +
+                   self.verts[2]->vertex.aPosition) / 3.f;
     vec3 to = center - viewPosition;
     float dist2 = to.x * to.x + to.y * to.y + to.z * to.z;
 
@@ -225,12 +369,12 @@ glit::Terrain::reshape(size_t level, Facet& self,
 
     if (!self.children) {
         // Subdivide allocate and assign verts.
-        subdivideFacet(self.verts[0]->aPosition,
-                       self.verts[1]->aPosition,
-                       self.verts[2]->aPosition,
-                       &self.childVerts[0].aPosition,
-                       &self.childVerts[1].aPosition,
-                       &self.childVerts[2].aPosition);
+        subdivideFacet(self.verts[0]->vertex.aPosition,
+                       self.verts[1]->vertex.aPosition,
+                       self.verts[2]->vertex.aPosition,
+                       &self.childVerts[0].vertex.aPosition,
+                       &self.childVerts[1].vertex.aPosition,
+                       &self.childVerts[2].vertex.aPosition);
 
         self.children = new Facet[4];
 
@@ -251,30 +395,64 @@ glit::Terrain::reshape(size_t level, Facet& self,
         self.children[3].verts[2] = self.verts[2];
     }
 
-    reshape(level + 1, self.children[0], viewPosition, viewDirection);
-    reshape(level + 1, self.children[1], viewPosition, viewDirection);
-    reshape(level + 1, self.children[2], viewPosition, viewDirection);
-    reshape(level + 1, self.children[3], viewPosition, viewDirection);
+    reshapeN(level + 1, self.children[0], viewPosition, viewDirection);
+    reshapeN(level + 1, self.children[1], viewPosition, viewDirection);
+    reshapeN(level + 1, self.children[2], viewPosition, viewDirection);
+    reshapeN(level + 1, self.children[3], viewPosition, viewDirection);
 }
 
 /* static */ uint32_t
-glit::Terrain::pushVertex(Facet::Vertex* insert, vector<Facet::Vertex>& verts)
+glit::Terrain::pushVertex(Facet::VertexAndIndex* insert, vector<Facet::Vertex>& verts)
 {
-    uint32_t i0 = verts.size();
-    verts.push_back(*insert);
-    return i0;
+    if (insert->index != uint32_t(-1))
+        return insert->index;
+    insert->index = verts.size();
+    verts.push_back(insert->vertex);
+    return insert->index;
 }
 
 void
-glit::Terrain::drawSubtree(Facet& facet,
-                           vector<Facet::Vertex>& verts,
-                           vector<uint32_t>& indices) const
+glit::Terrain::drawSubtreeTriStrip(vector<Facet::Vertex>& verts,
+                                   vector<uint32_t>& indices)
+{
+    //util::Timer t("Terrain::upload");
+    for (size_t i = 0; i < 20; ++i)
+        drawSubtreeTriStripN(facets[i], verts, indices);
+}
+
+void
+glit::Terrain::drawSubtreeTriStripN(Facet& facet,
+                                    vector<Facet::Vertex>& verts,
+                                    vector<uint32_t>& indices) const
 {
     if (facet.children) {
-        drawSubtree(facet.children[0], verts, indices);
-        drawSubtree(facet.children[1], verts, indices);
-        drawSubtree(facet.children[2], verts, indices);
-        drawSubtree(facet.children[3], verts, indices);
+        drawSubtreeTriStripN(facet.children[0], verts, indices);
+        drawSubtreeTriStripN(facet.children[1], verts, indices);
+        drawSubtreeTriStripN(facet.children[2], verts, indices);
+        drawSubtreeTriStripN(facet.children[3], verts, indices);
+    } else {
+        uint32_t i0 = pushVertex(facet.verts[0], verts);
+        uint32_t i1 = pushVertex(facet.verts[1], verts);
+        uint32_t i2 = pushVertex(facet.verts[2], verts);
+        indices.push_back(i0);
+        indices.push_back(i0);
+        indices.push_back(i1);
+        indices.push_back(i2);
+        indices.push_back(i2);
+        indices.push_back(i2);
+    }
+}
+
+void
+glit::Terrain::drawSubtreeWireframe(Facet& facet,
+                                    vector<Facet::Vertex>& verts,
+                                    vector<uint32_t>& indices) const
+{
+    if (facet.children) {
+        drawSubtreeWireframe(facet.children[0], verts, indices);
+        drawSubtreeWireframe(facet.children[1], verts, indices);
+        drawSubtreeWireframe(facet.children[2], verts, indices);
+        drawSubtreeWireframe(facet.children[3], verts, indices);
     } else {
         uint32_t i0 = pushVertex(facet.verts[0], verts);
         uint32_t i1 = pushVertex(facet.verts[1], verts);

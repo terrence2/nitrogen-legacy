@@ -26,9 +26,6 @@ namespace glit {
 
 class IcoSphere
 {
-    using Face = std::tuple<uint16_t, uint16_t, uint16_t>;
-    using Faces = std::vector<Face>;
-
   public:
     struct Vertex {
         glm::vec3 aPosition;
@@ -36,6 +33,14 @@ class IcoSphere
             attribs.push_back(MakeGLMVertexAttrib(Vertex, aPosition, false));
         }
     };
+    struct Face {
+        int i0, i1, i2;
+        glm::vec3 normal;
+
+        Face(int v0, int v1, int v2, const std::vector<Vertex>& verts);
+    };
+    using Faces = std::vector<Face>;
+
 
     IcoSphere(int iterations);
     Mesh uploadAsPoints() const;

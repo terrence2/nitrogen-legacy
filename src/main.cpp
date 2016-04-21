@@ -37,6 +37,7 @@
 #include "planet.h"
 #include "player.h"
 #include "shader.h"
+#include "sun.h"
 #include "terrain.h"
 #include "vertex.h"
 #include "window.h"
@@ -141,7 +142,8 @@ do_main()
     //gWorld.camera.warp(vec3(0.f, 0.f, 6371.002f * 5), vec3(0.f, 0.f, -1.f));
 
     auto poi = POI::create();
-    auto planet = make_shared<glit::Planet>();
+    auto sun = glit::Sun::create();
+    auto planet = make_shared<glit::Planet>(sun);
 
     auto player = make_shared<glit::Player>(planet);
     dispatcher.onEdge("+ufoLeft", [&](){player->ufoStartLeft();});
@@ -168,6 +170,8 @@ do_main()
     dispatcher.onEdge("-ufoRotateCCW", [&](){player->ufoStopRotateCCW();});
     dispatcher.onEdge("+ufoRotateCW", [&](){player->ufoStartRotateCW();});
     dispatcher.onEdge("-ufoRotateCW", [&](){player->ufoStopRotateCW();});
+    dispatcher.onEdge("+ufoAccelerate", [&](){player->ufoAccelerate();});
+    dispatcher.onEdge("-ufoAccelerate", [&](){player->ufoDecelerate();});
 
     dispatcher.onLevel("ufoYaw", [&](double l, double dl){
             player->ufoYawDelta(dl);});
@@ -190,8 +194,11 @@ do_main()
     debugBindings.bindMouseAxis("ufoYaw", 0);
     debugBindings.bindMouseAxis("ufoPitch", 1);
 
+    debugBindings.bindMouseScroll("ufoAccelerate", 1);
+
     // Note: order is important here.
     gWorld.entities.push_back(player);
+    gWorld.entities.push_back(sun);
     gWorld.entities.push_back(planet);
     gWorld.entities.push_back(poi);
 
@@ -219,6 +226,13 @@ do_loop()
     glClearColor(0, 0, 0, 255);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    glEnable(GL_CULL_FACE);
+    glFrontFace(GL_CW);
+    glCullFace(GL_BACK);
+
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+
     for (auto e : gWorld.entities)
         e->tick(now, now - lastFrameTime);
 
@@ -227,6 +241,11 @@ do_loop()
     gWorld.camera.warp(player->viewPosition(),
                        player->viewDirection(),
                        player->viewUp());
+    /*
+    gWorld.camera.warp(vec3(0.f, 20000.f, 0.f),
+                       vec3(0.f, -1.f, 0.f),
+                       vec3(0.f, 0.f, -1.f));
+    */
 
     for (auto e : gWorld.entities)
         e->draw(gWorld.camera);

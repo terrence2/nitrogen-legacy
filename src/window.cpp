@@ -15,6 +15,8 @@
 
 #include <iostream>
 
+using namespace std;
+
 glit::Window::Window()
   : state(State::PreInit)
   , bindings(nullptr)
@@ -24,10 +26,10 @@ void
 glit::Window::init()
 {
     if (state != State::PreInit)
-        throw std::runtime_error("Window already inited");
+        throw runtime_error("Window already inited");
 
     if (!glfwInit())
-        throw std::runtime_error("glfwInit failed");
+        throw runtime_error("glfwInit failed");
     state = State::Inited;
 
     // Tie into error handling.
@@ -54,7 +56,7 @@ glit::Window::init()
 #endif
     window = glfwCreateWindow(width, height, "fsim", monitor, NULL);
     if (!window)
-        throw std::runtime_error("glfwCreateWindow failed");
+        throw runtime_error("glfwCreateWindow failed");
 
     // Query the actual size we got.
     glfwGetWindowSize(window, &width_, &height_);
@@ -64,6 +66,7 @@ glit::Window::init()
     glfwSetCursorPosCallback(window, cursorPositionCallback);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetCursorPosCallback(window, cursorPositionCallback);
+    glfwSetScrollCallback(window, mouseScrollCallback);
     glfwSetKeyCallback(window, keyCallback);
     glfwSetWindowCloseCallback(window, windowCloseCallback);
     glfwSetWindowSizeCallback(window, windowSizeCallback);
@@ -77,7 +80,7 @@ glit::Window::init()
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
 #define PRINT_GL_STRING(key) \
-    std::cout << #key << ": " << glGetString(key) << std::endl;
+    cout << #key << ": " << glGetString(key) << endl;
 FOR_EACH_GL_STRINGS(PRINT_GL_STRING)
 #undef PRINT_GL_STRING
     // we need GL_OES_element_index_uint
@@ -135,6 +138,14 @@ glit::Window::cursorPositionCallback(GLFWwindow* window,
 }
 
 /* static */ void
+glit::Window::mouseScrollCallback(GLFWwindow* window,
+                                  double xpos, double ypos)
+{
+    Window* self = fromGLFW(window);
+    self->bindings->dispatchMouseScroll(xpos, ypos);
+}
+
+/* static */ void
 glit::Window::windowCloseCallback(GLFWwindow* window)
 {
     Window* self = fromGLFW(window);
@@ -145,8 +156,7 @@ glit::Window::windowCloseCallback(GLFWwindow* window)
 glit::Window::windowSizeCallback(GLFWwindow* window, int width, int height)
 {
     Window* self = fromGLFW(window);
-    std::cout << "Window size changed to: " << width << " x " << height <<
-                 std::endl;
+    cout << "Window size changed to: " << width << " x " << height << endl;
     self->width_ = width;
     self->height_ = height;
     glViewport(0, 0, width, height);

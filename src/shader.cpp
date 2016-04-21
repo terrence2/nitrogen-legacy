@@ -64,9 +64,39 @@ makeCompileFailureMessage(string info, string source)
 }
 
 template <GLenum Type>
-glit::BaseShader<Type>::BaseShader(std::string source)
+/* static */ void
+glit::BaseShader<Type>::loadIncludeFile(const string& line, vector<string>& output)
+{
+    // Strip the #include (size 8).
+    string noinclude(line.begin() + 8, line.end());
+    string filename(glit::util::trim(noinclude, " <>\"\t"));
+    if (filename == string("noise2D.glsl")) {
+        output.push_back(glit::include_noise2D_glsl);
+    } else {
+        throw runtime_error(string("unknown include file: ") + filename);
+    }
+}
+
+template <GLenum Type>
+/* static */ string
+glit::BaseShader<Type>::bundleImports(const string& source)
+{
+    vector<string> output;
+    for (auto& line : util::split(source, '\n')) {
+        line = util::trim(line);
+        if (util::startswith(line, string("#include")))
+            loadIncludeFile(line, output);
+        else
+            output.push_back(line);
+    }
+    return util::join(output, string("\n"));
+}
+
+template <GLenum Type>
+glit::BaseShader<Type>::BaseShader(string source)
   : id(glCreateShader(Type))
 {
+    source = bundleImports(source);
     const char* chars = source.c_str();
     glShaderSource(id, 1, &chars, nullptr);
     glCompileShader(id);
@@ -105,35 +135,9 @@ glit::BaseShader<Type>::~BaseShader()
 template class glit::BaseShader<GL_FRAGMENT_SHADER>;
 template class glit::BaseShader<GL_VERTEX_SHADER>;
 
-static void
-loadIncludeFile(const string& line, vector<string>& output)
-{
-    // Strip the #include (size 8).
-    string noinclude(line.begin() + 8, line.end());
-    string filename(glit::util::trim(noinclude, " <>\"\t"));
-    if (filename == string("noise2D.glsl")) {
-        output.push_back(glit::include_noise2D_glsl);
-    } else {
-        throw runtime_error(string("unknown include file: ") + filename);
-    }
-}
-
-std::string
-glit::VertexShader::bundleImports(const char* source)
-{
-    vector<string> output;
-    for (auto& line : util::split(source, '\n')) {
-        line = util::trim(line);
-        if (util::startswith(line, string("#include")))
-            loadIncludeFile(line, output);
-        else
-            output.push_back(line);
-    }
-    return util::join(output, string("\n"));
-}
-
-glit::VertexShader::VertexShader(const char* source, const VertexDescriptor& desc)
-  : Base(bundleImports(source))
+glit::VertexShader::VertexShader(const string& source,
+                                 const VertexDescriptor& desc)
+  : Base(source)
   , vertexDesc(desc)
 {
 }
@@ -222,9 +226,8 @@ glit::Program::enableVertexAttribs() const
     for (auto& attr : vertexShader.vertexDesc.attributes()) {
         GLint index = glGetAttribLocation(id, attr.name());
         if (index == -1) {
-            throw runtime_error(string(
-                        "failed to enable vertex attribute: " +
-                        string(attr.name())));
+            cerr << "failed to enable vertex attribute: " << attr.name() << endl;
+            continue;
         }
         attr.enable(index);
     }

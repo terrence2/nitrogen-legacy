@@ -18,13 +18,15 @@
 #include <glm/mat4x4.hpp>
 
 #include "player.h"
+#include "sun.h"
 
 using namespace glm;
 using namespace std;
 
-glit::Planet::Planet()
+glit::Planet::Planet(shared_ptr<Sun>& s)
   : terrain_(6371.f) //km
   , rotation(0.f)
+  , sun(s)
 {}
 
 glit::Planet::~Planet()
@@ -34,22 +36,21 @@ glit::Planet::~Planet()
 void
 glit::Planet::tick(double t, double dt)
 {
-    /*
-    rotation += dt;
-    while (rotation > 2.0 * M_PI)
-        rotation -= 2.0 * M_PI;
-    */
+    // Note: the sun goes around us so that we don't have to worry about
+    // numerical stability or multiply everything into this frame of reference.
 }
 
 void
 glit::Planet::draw(const glit::Camera& camera)
 {
+    auto sunp = sun.lock();
+    if (!sunp)
+        throw runtime_error("no sun pointer in terrain draw");
+
     auto model = rotate(mat4(1.f), rotation, vec3(0.0f, 1.0f, 0.0f));
     auto modelviewproj = camera.transform() * model;
 
-    //auto mesh = terrain_.uploadAsWireframe(camera.viewPosition(),
-    //                                       camera.viewDirection());
-    auto mesh = terrain_.uploadAsWireframe(vec3(0.f, 0.f, 0.f),
-                                           vec3(0.f, 0.f, 1.f));
-    mesh->draw(modelviewproj);
+    //auto mesh = terrain_.uploadAsWireframe(camera.viewPosition(), camera.viewDirection());
+    auto mesh = terrain_.uploadAsTriStrips(camera.viewPosition(), camera.viewDirection());
+    mesh->draw(modelviewproj, camera.viewPosition(), sunp->sunDirection());
 }

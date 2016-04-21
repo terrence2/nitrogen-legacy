@@ -14,35 +14,35 @@
 
 #include <memory>
 
-#include "camera.h"
+#include <glm/gtc/quaternion.hpp>
+
 #include "entity.h"
-#include "terrain.h"
+#include "mesh.h"
 
 namespace glit {
 
-class Player;
-class Sun;
-
-class Planet : public Entity
+// NOTE! In our simulation the sun goes around the earth.
+class Sun : public Entity
 {
-    // The terrain state. Updated by providing the camera in draw.
-    Terrain terrain_;
+    // FIXME: note that we've sped this up to see lighting in action.
+    //constexpr static double AngularVelocity = (2.0 * M_PI) / (24 * 60 * 60);
+    constexpr static double AngularVelocity = 5000.0 * (2.0 * M_PI) / (24 * 60 * 60);
 
-    // The current rotational state.
-    float rotation;
-
-    // Reference to the sun.
-    std::weak_ptr<Sun> sun;
-
-    explicit Planet(Planet&&) = delete;
-    explicit Planet(const Planet&) = delete;
+    Mesh mesh;  // Mostly for visualization.
+    double ang;
 
   public:
-    explicit Planet(std::shared_ptr<Sun>& s);
-    ~Planet() override;
+    explicit Sun(Mesh&& m);
 
-    const Terrain& terrain() const { return terrain_; }
+    // Rays from the sun are coming from this direction. We assume all rays are
+    // parallel, given the distance.
+    glm::vec3 sunDirection() const {
+        glm::quat q = angleAxis(float(ang), glm::vec3(0.f, 1.f, 0.f));
+        glm::vec3 dir = q * glm::vec3(0.f, 0.f, 1.f);
+        return -dir;
+    }
 
+    static std::shared_ptr<Sun> create();
     void tick(double t, double dt) override;
     void draw(const Camera& camera) override;
 };

@@ -1,12 +1,15 @@
-Get UFO motion working fully. We need mouse plus fluid keyboard.
-  - May need to move to abstract units for this. Is there a way we can test precision over the
-    range we need?
-Draw tris as solid strips and ensure level joins are working great. Employ the POI for this.
-Enable and use lighting and compress day/night. We should be able to see our terrain at this point.
+DONE Get UFO motion working.
+DONE Tie the terrain POI back to the camera.
+DONE Draw tris as solid strips.
+DONE Allow speed control of the UFO with the mouse wheel.
+Enable and use diffuse lighting; compress day/night for better effect.
+Figure out if we need to move to abstract units for this. Is there a way we can test precision over the range we need?
+Ensure terrain detail level joins are working. Employ the POI and lighting for this.
 Apply a colormap. Create the code to load store and manage diffuse color textures.
 Create controls for adjusting a fractal brownian heightmap and use it to get reasonable terrain.
   * We have to do both color and heights at the same time to get reasonable results.
   * This is not the final pass, it just has to look good enough to let us work on the atmosphere.
+Create the skybox: it's full of stars.
 Draw an atmosphere.
   * Ensure it looks good at all times and from all altitudes and space.
   * Do not forget that the atmosphere has to light the ground (and other objects?) as well, so we

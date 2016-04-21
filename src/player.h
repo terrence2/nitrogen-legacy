@@ -38,6 +38,7 @@ class Player : public Entity
     glm::vec3 motionReq;
     glm::vec3 rotateReq;
     glm::vec2 rotateAxis;
+    float speed;
 
   public:
     Player(std::shared_ptr<Planet>& p);
@@ -71,6 +72,11 @@ class Player : public Entity
     void ufoStopRotateCCW() { rotateReq[2] = 0.f; }
     void ufoStartRotateCW() { rotateReq[2] = -1.f; }
     void ufoStopRotateCW() { rotateReq[2] = 0.f; }
+
+    constexpr static float MaxSpeed = 256.f;
+    constexpr static float MinSpeed = 0.001f;
+    void ufoAccelerate() { if (speed < MaxSpeed) speed *= 2.f; }
+    void ufoDecelerate() { if (speed > MinSpeed) speed /= 2.f; }
 
     // The request is in angleAxis form, so pitch and yaw are on converse axes.
     void ufoYawDelta(double dyaw) { rotateAxis[1] += dyaw; }

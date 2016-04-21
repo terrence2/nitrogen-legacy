@@ -27,6 +27,7 @@ glit::Player::Player(std::shared_ptr<Planet>& p)
   , motionReq(0.f, 0.f, 0.f)
   , rotateReq(0.f, 0.f, 0.f)
   , rotateAxis(0.f, 0.f)
+  , speed(1.f)
 {
     // FIXME: currently we're just setting outself at 0,0 lat/lon.
     // I'm not sure what we actually want to do to initialize the
@@ -56,9 +57,10 @@ glit::Player::tick(double t, double dt)
     rotateAxis[0] = 0.f;
     rotateAxis[1] = 0.f;
 
+    cout << "Speed is: " << speed << endl;
     // Apply button motion requests.
     if (length(motionReq) != 0.f)
-        pos += dir * normalize(motionReq);
+        pos += speed * (dir * normalize(motionReq));
 }
 
 void

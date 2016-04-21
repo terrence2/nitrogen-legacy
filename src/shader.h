@@ -55,6 +55,11 @@ class BaseShader
 
     BaseShader(const BaseShader&) = delete;
 
+  protected:
+    static std::string bundleImports(const std::string& source);
+    static void loadIncludeFile(const std::string& line,
+                                std::vector<std::string>& output);
+
   public:
     BaseShader(std::string source);
     BaseShader(BaseShader&& other);
@@ -71,10 +76,8 @@ class VertexShader : public BaseShader<GL_VERTEX_SHADER>
 
     VertexShader(const VertexShader&) = delete;
 
-    std::string bundleImports(const char* source);
-
   public:
-    VertexShader(const char* source, const VertexDescriptor& desc);
+    VertexShader(const std::string& source, const VertexDescriptor& desc);
     VertexShader(VertexShader&& other);
 };
 
@@ -103,7 +106,8 @@ class Program
         if (inputs.size() - N != sizeof...(args) + 1)
             throw std::runtime_error("wrong number of inputs to shader");
         GLenum actual_enum = MapTypeToTraits<
-            typename std::remove_reference<Fst>::type>::gl_enum;
+            typename std::remove_cv<
+                typename std::remove_reference<Fst>::type>::type>::gl_enum;
         if (inputs[N].glEnum() != actual_enum) {
             throw std::runtime_error(std::string("type mismatch at input ") +
                                      std::to_string(N));
@@ -125,6 +129,9 @@ class Program
     void bindUniforms() const {}
     void bindUniform(GLint index, float f) const { glUniform1f(index, f); }
     void bindUniform(GLint index, int i) const { glUniform1i(index, i); }
+    void bindUniform(GLint index, const glm::vec3& v) const {
+        glUniform3fv(index, 1, glm::value_ptr(v));
+    }
     void bindUniform(GLint index, const glm::mat4& m) const {
         glUniformMatrix4fv(index, 1, GL_FALSE, glm::value_ptr(m));
     }

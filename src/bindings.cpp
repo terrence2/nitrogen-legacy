@@ -43,6 +43,19 @@ glit::InputBindings::dispatchMouseMotion(double x, double y,
 }
 
 void
+glit::InputBindings::dispatchMouseScroll(double x, double y) const
+{
+    if (x && mouseScroll[0].isBound()) {
+        const char* edge = x > 0.0 ? "+" : "-";
+        dispatcher.notifyEdge(edge + mouseScroll[0].event());
+    }
+    if (y && mouseScroll[1].isBound()) {
+        const char* edge = y > 0.0 ? "+" : "-";
+        dispatcher.notifyEdge(edge + mouseScroll[1].event());
+    }
+}
+
+void
 glit::InputBindings::bindNamedKey(string event, int key,
                                   int mods /* = 0 */)
 {
@@ -58,7 +71,16 @@ void
 glit::InputBindings::bindMouseAxis(string event, int axis)
 {
     if (axis != 0 && axis != 1)
-        throw runtime_error("only mouse axis 0 and 1 are supported");
+        throw runtime_error("only mouse position axis 0 and 1 are supported");
 
     mouseMotion[axis] = MouseMotionEvent(event);
+}
+
+void
+glit::InputBindings::bindMouseScroll(std::string event, int axis)
+{
+    if (axis != 0 && axis != 1)
+        throw runtime_error("only mouse scroll axis 0 and 1 are supported");
+
+    mouseScroll[axis] = MouseScrollEvent(event);
 }

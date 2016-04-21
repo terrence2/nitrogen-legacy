@@ -32,6 +32,7 @@ class InputBindings
     friend class Window;
     void dispatchKeyEvent(int key, int scancode, int action, int mods) const;
     void dispatchMouseMotion(double x, double y, double dx, double dy) const;
+    void dispatchMouseScroll(double x, double y) const;
 
     class KeyboardKeyEvent
     {
@@ -62,11 +63,25 @@ class InputBindings
     };
     MouseMotionEvent mouseMotion[2];
 
+    class MouseScrollEvent
+    {
+        std::string event_;
+      public:
+        MouseScrollEvent() : event_("") {}
+        explicit MouseScrollEvent(std::string e) : event_(e) {}
+
+        bool isBound() const { return event_ != ""; }
+        std::string event() const { return event_; }
+    };
+    MouseScrollEvent mouseScroll[2];
+
   public:
     InputBindings(const EventDispatcher& eventDispatcher,
                   const std::string& name);
     void bindNamedKey(std::string event, int key, int mods = -1);
+    void bindButton(std::string event, int axis);
     void bindMouseAxis(std::string event, int axis);
+    void bindMouseScroll(std::string event, int axis);
 
     // TODO: Have not had a need yet.
     //void bindScancode(std::string event, int scancode, int mods = -1);

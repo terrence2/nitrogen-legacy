@@ -58,7 +58,7 @@ void
 glit::VertexAttrib::disable() const
 {
     if (index_ == -1)
-        throw runtime_error("double disable of attribute");
+        cerr << "disabling attribute that was never enabled" << endl;
 
     glDisableVertexAttribArray(GLuint(index_));
     index_ = -1;
@@ -120,12 +120,13 @@ glit::VertexBuffer::unbind()
 }
 
 glit::IndexBuffer::IndexBuffer()
-  : BufferBase(), numIndices_(-1)
+  : BufferBase(), numIndices_(-1), type_(-1)
 {}
 
 glit::IndexBuffer::IndexBuffer(IndexBuffer&& other)
   : BufferBase(forward<BufferBase>(other))
   , numIndices_(other.numIndices_)
+  , type_(other.type_)
 {
     other.numIndices_ = -1;
 }
@@ -147,6 +148,9 @@ glit::IndexBuffer::unbind()
 void
 glit::IndexBuffer::orphan()
 {
+    if (type_ == -1)
+        return;
+
     size_t size = 1;
     if (type_ == GL_UNSIGNED_SHORT)
         size = sizeof(uint16_t);
