@@ -116,6 +116,7 @@ glit::IcoSphere::makePointsProgram()
     auto VertexDesc = VertexDescriptor::fromType<Vertex>();
     VertexShader vs(
             R"SHADER(
+            #version 100
             precision highp float;
             uniform mat4 uModelViewProj;
             attribute vec3 aPosition;
@@ -129,6 +130,7 @@ glit::IcoSphere::makePointsProgram()
             VertexDesc);
     FragmentShader fs(
             R"SHADER(
+            #version 100
             precision highp float;
             varying vec4 vColor;
             void main() {

@@ -218,17 +218,10 @@ do_main()
 void
 do_loop()
 {
-    glit::util::Timer t("frame");
+    //glit::util::Timer t("frame");
 
     static double lastFrameTime = 0.0;
     double now = glfwGetTime();
-
-    /*
-    float off = 6371.f * 5.f;
-    vec3 pos(off * sin(now / 2.f), 0.f, off * cos(now / 2.f));
-    vec3 dir = normalize(-pos);
-    gWorld.camera.warp(pos, dir, vec3(0.f, 1.f, 0.f));
-    */
 
     glClearColor(0, 0, 0, 255);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

@@ -256,7 +256,7 @@ glit::Terrain::makePointsProgram()
 
             void main() {
                 float diffuse = dot(vNormal, -uSunDirection);
-                gl_FragColor = vec4(vColor * diffuse, 1.0);
+                gl_FragData[0] = vec4(vColor * diffuse, 1.0);
             }
             ///////////////////////////////////////////////////////////////////
             )SHADER"
