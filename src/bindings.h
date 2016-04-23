@@ -26,6 +26,30 @@ namespace glit {
 // etc.
 class InputBindings
 {
+  public:
+    InputBindings(const EventDispatcher& eventDispatcher,
+                  const std::string& name);
+    void bindNamedKey(std::string event, int key, int mods = -1);
+    void bindButton(std::string event, int axis);
+    void bindMouseAxis(std::string event, int axis);
+
+    enum class MouseScrollAxis {
+        Up = 1,
+        Down = -1,
+        Left = -2,
+        Right = 2
+    };
+    void bindMouseScroll(std::string event, MouseScrollAxis axis);
+
+    // TODO: Have not had a need yet.
+    //void bindScancode(std::string event, int scancode, int mods = -1);
+
+  private:
+    InputBindings(const InputBindings&) = delete;
+    InputBindings(InputBindings&&) = delete;
+    InputBindings& operator=(const InputBindings&) = delete;
+    InputBindings& operator=(InputBindings&&) = delete;
+
     const EventDispatcher& dispatcher;
     const std::string name;
 
@@ -73,23 +97,9 @@ class InputBindings
         bool isBound() const { return event_ != ""; }
         std::string event() const { return event_; }
     };
-    MouseScrollEvent mouseScroll[2];
-
-  public:
-    InputBindings(const EventDispatcher& eventDispatcher,
-                  const std::string& name);
-    void bindNamedKey(std::string event, int key, int mods = -1);
-    void bindButton(std::string event, int axis);
-    void bindMouseAxis(std::string event, int axis);
-    void bindMouseScroll(std::string event, int axis);
-
-    // TODO: Have not had a need yet.
-    //void bindScancode(std::string event, int scancode, int mods = -1);
-
-    InputBindings(const InputBindings&) = delete;
-    InputBindings(InputBindings&&) = delete;
-    InputBindings& operator=(const InputBindings&) = delete;
-    InputBindings& operator=(InputBindings&&) = delete;
+    MouseScrollEvent mouseScroll_[4];
+    const MouseScrollEvent& scrollEvent(MouseScrollAxis axis) const;
+    MouseScrollEvent& scrollEvent(MouseScrollAxis axis);
 };
 
 } // namespace glit

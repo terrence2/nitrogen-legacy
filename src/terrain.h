@@ -32,7 +32,7 @@ namespace glit {
 class Terrain
 {
   public:
-    Terrain(float r);
+    Terrain();
     ~Terrain();
     Mesh* uploadAsWireframe(glm::vec3 viewPosition, glm::vec3 viewDirection);
     Mesh* uploadAsTriStrips(glm::vec3 viewPosition, glm::vec3 viewDirection);
@@ -67,11 +67,11 @@ class Terrain
         // The vertex Numbers are as follows.
         //  ________________
         //  \p0    /\    p1/
-        //   \    /c2\    /
-        //    \c1/    \c0/
+        //   \ A  /c2\ C  /
+        //    \c1/ B  \c0/
         //     \/______\/
         //      \      /
-        //       \    /
+        //       \ D  /
         //        \p2/
         //         \/
         //
@@ -104,6 +104,36 @@ class Terrain
     std::vector<Facet::VertexAndIndex> baseVerts;
 
 
+    // Precision
+    // =========
+    //
+    // 23 bits of precision is not really enough, but we can try
+    // to minimize the error. In particular, rather than using realistic units
+    // we set the terrain to a height of 1.0. This gives us an error in meters
+    // at the surface of:
+    //
+    //   (gdb) p 1.0 / (6371.0 * 1000.0)
+    //   $5 = 1.5696123057604769e-07
+    //   (gdb) p 1.0f / (6371.0f * 1000.0f)
+    //   $6 = 1.56961221e-07
+    //   (gdb) p 1.5696123057604769e-07 - 1.56961221e-07
+    //   $23 = 9.5760476847870859e-15
+    //
+    // Compared to using real units:
+    //
+    //   (gdb) p 6371001.0 / 6371000.0
+    //   $24 = 1.0000001569612305
+    //   (gdb) p 6371001.0f / 6371000.0f
+    //   $25 = 1.00000012
+    //   (gdb) p 1.0000001569612305 - 1.00000012
+    //   $26 = 3.6961230520660138e-08
+    //
+    // ~7 orders of magnitude more precision for things happening on or near
+    // the surface.
+    //
+    // More importantly, it lets us set a really near back frustum (like 10)
+    // which gives us very little z tearing. It also helps keep shaders from
+    // turning into a random hash far away from the camera.
 
     // LOD
     // ===
@@ -119,6 +149,7 @@ class Terrain
     const static size_t MaxSubdivisions = 23;
     const static float SubdivisionDistance[MaxSubdivisions];
     float SubdivisionRadiusSquared[MaxSubdivisions];
+    float EdgeLengths[MaxSubdivisions];
     //
     //
     // Units and Numeric Precision

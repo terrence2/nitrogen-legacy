@@ -27,9 +27,9 @@ glit::Player::Player(std::shared_ptr<Planet>& p)
   , motionReq(0.f, 0.f, 0.f)
   , rotateReq(0.f, 0.f, 0.f)
   , rotateAxis(0.f, 0.f)
-  , speed(1.f)
+  , speed(100000.f / 6371000.f)
 {
-    // FIXME: currently we're just setting outself at 0,0 lat/lon.
+    // FIXME: currently we're just setting ourself at 0,0 lat/lon.
     // I'm not sure what we actually want to do to initialize the
     // player character.
     auto& terrain = p->terrain();
@@ -45,9 +45,9 @@ void
 glit::Player::tick(double t, double dt)
 {
     // Apply rotation requested via keyboard buttons.
-    quat qX = angleAxis(rotateReq[0] * 0.01f, vec3(1.f, 0.f, 0.f));
-    quat qY = angleAxis(rotateReq[1] * 0.01f, vec3(0.f, 1.f, 0.f));
-    quat qZ = angleAxis(rotateReq[2] * 0.01f, vec3(0.f, 0.f, 1.f));
+    quat qX = angleAxis(rotateReq[0] * float(dt) / 2.f, vec3(1.f, 0.f, 0.f));
+    quat qY = angleAxis(rotateReq[1] * float(dt) / 2.f, vec3(0.f, 1.f, 0.f));
+    quat qZ = angleAxis(rotateReq[2] * float(dt) / 2.f, vec3(0.f, 0.f, 1.f));
     dir = dir * qX * qY * qZ;
 
     // Apply rotation requested via mouse movement.
@@ -57,7 +57,6 @@ glit::Player::tick(double t, double dt)
     rotateAxis[0] = 0.f;
     rotateAxis[1] = 0.f;
 
-    cout << "Speed is: " << speed << endl;
     // Apply button motion requests.
     if (length(motionReq) != 0.f)
         pos += speed * (dir * normalize(motionReq));

@@ -122,7 +122,7 @@ glit::IcoSphere::makePointsProgram()
             varying vec4 vColor;
             void main()
             {
-                gl_Position = uModelViewProj * vec4(aPosition, 1.0f);
+                gl_Position = uModelViewProj * vec4(aPosition, 1.0);
                 vColor = vec4(255, 255, 255, 255);
             }
             )SHADER",

@@ -64,7 +64,7 @@ glit::Terrain::subdivideFacet(vec3 p0, vec3 p1, vec3 p2,
     *c2 = radius * normalize(bisect(p0, p1));
 }
 
-glit::Terrain::Terrain(float r)
+glit::Terrain::Terrain()
   : programPoints(makePointsProgram())
   , wireframeMesh(Drawable(programPoints, GL_LINES,
            make_shared<VertexBuffer>(VertexDescriptor::fromType<Facet::Vertex>()),
@@ -72,7 +72,7 @@ glit::Terrain::Terrain(float r)
   , tristripMesh(Drawable(programPoints, GL_TRIANGLE_STRIP,
            make_shared<VertexBuffer>(VertexDescriptor::fromType<Facet::Vertex>()),
            make_shared<IndexBuffer>()))
-  , radius(r)
+  , radius(100000.f)
 {
     // Compute the subdivision distances from the table.
     for (size_t i = 0; i < util::ArrayLength(SubdivisionDistance); ++i) {
@@ -97,6 +97,19 @@ glit::Terrain::Terrain(float r)
         facets[i].verts[2] = &baseVerts[face.i2];
         ++i;
     }
+
+    float ang0 = acosf(dot(facets[0].verts[0]->vertex.aPosition / radius,
+                           facets[0].verts[1]->vertex.aPosition / radius));
+    float d0 = (radius * sin(ang0 / 2.f)) * 2.f;
+    cout << "angle: " << ang0 << "; dist: " << d0 << endl;
+    EdgeLengths[0] = d0;
+    for (size_t i = 1; i < util::ArrayLength(EdgeLengths); ++i) {
+        ang0 = ang0 / 2.0f;
+        d0 = (radius * sin(ang0 / 2.f)) * 2.f;
+        cout << "angle: " << ang0 << "; dist: " << d0 << endl;
+        EdgeLengths[i] = d0;
+    }
+
 }
 
 glit::Terrain::~Terrain()
@@ -112,6 +125,8 @@ glit::Terrain::makePointsProgram()
     VertexShader vs(
             R"SHADER(
             ///////////////////////////////////////////////////////////////////
+            #version 100
+            //#version 300 es
             precision highp float;
             uniform mat4 uModelViewProj;
             uniform vec3 uCameraPosition;
@@ -121,15 +136,17 @@ glit::Terrain::makePointsProgram()
             varying vec3 vNormal;
 
             const float PI = 3.1415925;
-            const float NormalSampleScale = PI / 16.0 / 6371.0;
-            const float HeightScale = 1000.0;
+            const float NormalSampleScale = PI / 16.0 / 1.0;
+            // everest is 8.8km; radius is 6371km;
+            const float HeightScale = 8.8 * 10.0 / 6371.0;
 
             #include <noise2D.glsl>
 
+            /*
             float fbm(vec2 pos, int octaves, float lacunarity, float gain) {
                 float sum = 0.0;
                 float freq = 1.0;
-                float amp = 0.5;
+                float amp = gain;
                 for (int i = 0; i < octaves; ++i) {
                     float n = snoise(pos * freq);
                     sum += n * amp;
@@ -138,6 +155,7 @@ glit::Terrain::makePointsProgram()
                 }
                 return sum;
             }
+            */
 
             vec2 polar(vec3 dir) {
                 return vec2(asin(dir.y), atan(dir.x, dir.z));
@@ -145,7 +163,7 @@ glit::Terrain::makePointsProgram()
 
             vec3 heightAt(vec2 latlon, vec3 dir, float radius) {
                 float adjustment = snoise(latlon) * HeightScale;
-                //float adjustment = fbm(latlon, 6, 2.0, 1.0);
+                //float adjustment = fbm(latlon, 1, 2.0, HeightScale);
                 return dir * (radius + adjustment);
             }
 
@@ -227,6 +245,8 @@ glit::Terrain::makePointsProgram()
     FragmentShader fs(
             R"SHADER(
             ///////////////////////////////////////////////////////////////////
+            #version 100
+            //#version 300 es
             precision highp float;
             const float PI = 3.1415925;
             uniform vec3 uSunDirection;
@@ -358,8 +378,9 @@ glit::Terrain::reshapeN(size_t level, Facet& self,
     float dist2 = to.x * to.x + to.y * to.y + to.z * to.z;
 
     // FIXME: do backface removal at this level.
-    if (level >= 8 ||
-        dist2 > SubdivisionRadiusSquared[level])
+    if (level >= 20 ||
+        (EdgeLengths[level] * EdgeLengths[level] * 100.f) < dist2)
+        //dist2 > SubdivisionRadiusSquared[level])
     {
         if (self.children)
             deleteChildren(self);
@@ -425,12 +446,8 @@ glit::Terrain::drawSubtreeTriStripN(Facet& facet,
                                     vector<Facet::Vertex>& verts,
                                     vector<uint32_t>& indices) const
 {
-    if (facet.children) {
-        drawSubtreeTriStripN(facet.children[0], verts, indices);
-        drawSubtreeTriStripN(facet.children[1], verts, indices);
-        drawSubtreeTriStripN(facet.children[2], verts, indices);
-        drawSubtreeTriStripN(facet.children[3], verts, indices);
-    } else {
+    // Draw leaf triangles.
+    if (!facet.children) {
         uint32_t i0 = pushVertex(facet.verts[0], verts);
         uint32_t i1 = pushVertex(facet.verts[1], verts);
         uint32_t i2 = pushVertex(facet.verts[2], verts);
@@ -440,6 +457,74 @@ glit::Terrain::drawSubtreeTriStripN(Facet& facet,
         indices.push_back(i2);
         indices.push_back(i2);
         indices.push_back(i2);
+        return;
+    }
+
+    // Recurse into our children.
+    drawSubtreeTriStripN(facet.children[0], verts, indices);
+    drawSubtreeTriStripN(facet.children[1], verts, indices);
+    drawSubtreeTriStripN(facet.children[2], verts, indices);
+    drawSubtreeTriStripN(facet.children[3], verts, indices);
+
+    // Draw joining tris between our children and grandchildren.
+    //
+    // Semi-Assumption: A maximum of one level of subdivision difference is
+    // possible between siblings. e.g. At whatever range we subdivide, the next
+    // subdivision range is always going to be more than one triangle centroid
+    // away. This means:
+    //   1- we only need to check locally between siblings, modulo the
+    //      top-level facet checks above; this can be done by checking if one
+    //      has children and the other does not.
+    //   2- we only ever need to insert a single triangle to join facets of
+    //      different levels.
+    // Note that we make these checks in the parent because the parent knows
+    // what is adjacent to which other child and where.
+    if (facet.children[0].children != facet.children[1].children) {
+        uint32_t i0, i1, i2;
+        if (facet.children[1].children) {
+            /*
+            i0 = facet.children[1].verts[2]->index;
+            i1 = facet.children[1].verts[1]->index;
+            i2 = facet.children[1].childVerts[0].index;
+            if (i0 == uint32_t(-1)) throw runtime_error("a0: what?");
+            if (i1 == uint32_t(-1)) throw runtime_error("a1: what?");
+            if (i2 == uint32_t(-1)) throw runtime_error("a2: what?");
+            indices.push_back(i0);
+            indices.push_back(i0);
+            indices.push_back(i1);
+            indices.push_back(i2);
+            indices.push_back(i2);
+            indices.push_back(i2);
+            */
+        } else {
+            /*
+            i0 = facet.children[0].verts[2]->index;
+            i1 = facet.children[0].childVerts[0].index;
+            i2 = facet.children[0].verts[1]->index;
+            if (i0 == uint32_t(-1)) throw runtime_error("b0: what?");
+            if (i1 == uint32_t(-1)) throw runtime_error("b1: what?");
+            if (i2 == uint32_t(-1)) throw runtime_error("b2: what?");
+            indices.push_back(i0);
+            indices.push_back(i0);
+            indices.push_back(i1);
+            indices.push_back(i2);
+            indices.push_back(i2);
+            indices.push_back(i2);
+            */
+        }
+        /*
+        indices.push_back(i0);
+        indices.push_back(i0);
+        indices.push_back(i1);
+        indices.push_back(i2);
+        indices.push_back(i2);
+        indices.push_back(i2);
+        */
+    }
+    if (facet.children[1].children != facet.children[2].children) {
+        if (!facet.children[1].children) {
+        } else {
+        }
     }
 }
 

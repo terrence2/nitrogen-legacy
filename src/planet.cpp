@@ -24,7 +24,7 @@ using namespace glm;
 using namespace std;
 
 glit::Planet::Planet(shared_ptr<Sun>& s)
-  : terrain_(6371.f) //km
+  : terrain_() //km
   , rotation(0.f)
   , sun(s)
 {}
@@ -50,7 +50,8 @@ glit::Planet::draw(const glit::Camera& camera)
     auto model = rotate(mat4(1.f), rotation, vec3(0.0f, 1.0f, 0.0f));
     auto modelviewproj = camera.transform() * model;
 
-    //auto mesh = terrain_.uploadAsWireframe(camera.viewPosition(), camera.viewDirection());
-    auto mesh = terrain_.uploadAsTriStrips(camera.viewPosition(), camera.viewDirection());
+    auto mesh = terrain_.uploadAsWireframe(camera.viewPosition(), camera.viewDirection());
+    //auto mesh = terrain_.uploadAsTriStrips(camera.viewPosition(), camera.viewDirection());
+    //auto mesh = terrain_.uploadAsTriStrips(vec3(0.f, 6300.f, 0.f), vec3(0.f, 0.f, 0.f));
     mesh->draw(modelviewproj, camera.viewPosition(), sunp->sunDirection());
 }

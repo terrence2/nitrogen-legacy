@@ -62,7 +62,7 @@ class POI : public glit::Entity
 
     POI(glit::Mesh&& prim)
       : primitive(forward<glit::Mesh>(prim))
-      , position(0.f, 6371.f * 2.f, 0.f)
+      , position(0.f, 637.1f * 2.f, 0.f)
       , view_direction(0.f, 0.f, -1.f)
     {}
     ~POI() override {}
@@ -76,7 +76,7 @@ class POI : public glit::Entity
     void tick(double t, double dt) override {
         auto rot = rotate(mat4(1.f), 0.001f,
                 normalize(vec3(1.f, 0.f, -1.f)));
-        float alt = 2.f * 6371.f + (6371.f * cosf(t / 2.7f));
+        float alt = 2.f * 637.1f + (637.1f * cosf(t / 2.7f));
         position = rot * vec4(normalize(position) * alt, 1.f);
     }
 
@@ -90,7 +90,6 @@ class POI : public glit::Entity
     }
 };
 
-
 struct WorldState
 {
     // The camera state.
@@ -100,7 +99,6 @@ struct WorldState
     vector<shared_ptr<glit::Entity>> entities;
 };
 static WorldState gWorld;
-
 
 static void do_loop();
 static int do_main();
@@ -139,7 +137,7 @@ do_main()
     gWindow.setCurrentBindings(debugBindings);
     //gWindow.setSceneGraph(scene);
     gWorld.camera.screenSizeChanged(gWindow.width(), gWindow.height());
-    //gWorld.camera.warp(vec3(0.f, 0.f, 6371.002f * 5), vec3(0.f, 0.f, -1.f));
+    //gWorld.camera.warp(vec3(0.f, 0.f, 637.1002f * 5), vec3(0.f, 0.f, -1.f));
 
     auto poi = POI::create();
     auto sun = glit::Sun::create();
@@ -171,12 +169,12 @@ do_main()
     dispatcher.onEdge("+ufoRotateCW", [&](){player->ufoStartRotateCW();});
     dispatcher.onEdge("-ufoRotateCW", [&](){player->ufoStopRotateCW();});
     dispatcher.onEdge("+ufoAccelerate", [&](){player->ufoAccelerate();});
-    dispatcher.onEdge("-ufoAccelerate", [&](){player->ufoDecelerate();});
+    dispatcher.onEdge("+ufoDecelerate", [&](){player->ufoDecelerate();});
 
     dispatcher.onLevel("ufoYaw", [&](double l, double dl){
-            player->ufoYawDelta(dl);});
+                                            player->ufoYawDelta(dl);});
     dispatcher.onLevel("ufoPitch", [&](double l, double dl){
-            player->ufoPitchDelta(dl);});
+                                            player->ufoPitchDelta(dl);});
 
     debugBindings.bindNamedKey("ufoLeft", GLFW_KEY_A);
     debugBindings.bindNamedKey("ufoRight", GLFW_KEY_D);
@@ -190,11 +188,16 @@ do_main()
     debugBindings.bindNamedKey("ufoRotateRight", GLFW_KEY_RIGHT);
     debugBindings.bindNamedKey("ufoRotateCCW", GLFW_KEY_Q);
     debugBindings.bindNamedKey("ufoRotateCW", GLFW_KEY_E);
+    debugBindings.bindNamedKey("ufoAccelerate", GLFW_KEY_R);
+    debugBindings.bindNamedKey("ufoDecelerate", GLFW_KEY_F);
 
     debugBindings.bindMouseAxis("ufoYaw", 0);
     debugBindings.bindMouseAxis("ufoPitch", 1);
 
-    debugBindings.bindMouseScroll("ufoAccelerate", 1);
+    debugBindings.bindMouseScroll("+ufoAccelerate",
+                                  glit::InputBindings::MouseScrollAxis::Up);
+    debugBindings.bindMouseScroll("+ufoDecelerate",
+                                  glit::InputBindings::MouseScrollAxis::Down);
 
     // Note: order is important here.
     gWorld.entities.push_back(player);
@@ -215,13 +218,17 @@ do_main()
 void
 do_loop()
 {
+    glit::util::Timer t("frame");
+
     static double lastFrameTime = 0.0;
     double now = glfwGetTime();
 
+    /*
     float off = 6371.f * 5.f;
     vec3 pos(off * sin(now / 2.f), 0.f, off * cos(now / 2.f));
     vec3 dir = normalize(-pos);
     gWorld.camera.warp(pos, dir, vec3(0.f, 1.f, 0.f));
+    */
 
     glClearColor(0, 0, 0, 255);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

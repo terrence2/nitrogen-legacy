@@ -22,6 +22,25 @@ glit::InputBindings::InputBindings(const EventDispatcher& eventDispatcher,
 {
 }
 
+const glit::InputBindings::MouseScrollEvent&
+glit::InputBindings::scrollEvent(MouseScrollAxis axis) const
+{
+    return const_cast<InputBindings*>(this)->scrollEvent(axis);
+}
+
+glit::InputBindings::MouseScrollEvent&
+glit::InputBindings::scrollEvent(MouseScrollAxis axis)
+{
+    switch (axis) {
+    case MouseScrollAxis::Left:  return mouseScroll_[0];
+    case MouseScrollAxis::Down:  return mouseScroll_[1];
+    case MouseScrollAxis::Up:    return mouseScroll_[2];
+    case MouseScrollAxis::Right: return mouseScroll_[3];
+    default:
+        throw runtime_error("invalid axis passed to scrollEvent");
+    }
+}
+
 void
 glit::InputBindings::dispatchKeyEvent(int key, int scancode, int action,
                                       int mods) const
@@ -45,13 +64,23 @@ glit::InputBindings::dispatchMouseMotion(double x, double y,
 void
 glit::InputBindings::dispatchMouseScroll(double x, double y) const
 {
-    if (x && mouseScroll[0].isBound()) {
-        const char* edge = x > 0.0 ? "+" : "-";
-        dispatcher.notifyEdge(edge + mouseScroll[0].event());
+    if (y > 0.0) {
+        auto up = scrollEvent(MouseScrollAxis::Up);
+        if (up.isBound())
+            dispatcher.notifyEdge(up.event());
+    } else if (y < 0.0) {
+        auto down = scrollEvent(MouseScrollAxis::Down);
+        if (down.isBound())
+            dispatcher.notifyEdge(down.event());
     }
-    if (y && mouseScroll[1].isBound()) {
-        const char* edge = y > 0.0 ? "+" : "-";
-        dispatcher.notifyEdge(edge + mouseScroll[1].event());
+    if (x > 0.0) {
+        auto right = scrollEvent(MouseScrollAxis::Right);
+        if (right.isBound())
+            dispatcher.notifyEdge(right.event());
+    } else if (x < 0.0) {
+        auto left = scrollEvent(MouseScrollAxis::Left);
+        if (left.isBound())
+            dispatcher.notifyEdge(left.event());
     }
 }
 
@@ -77,10 +106,7 @@ glit::InputBindings::bindMouseAxis(string event, int axis)
 }
 
 void
-glit::InputBindings::bindMouseScroll(std::string event, int axis)
+glit::InputBindings::bindMouseScroll(std::string event, MouseScrollAxis axis)
 {
-    if (axis != 0 && axis != 1)
-        throw runtime_error("only mouse scroll axis 0 and 1 are supported");
-
-    mouseScroll[axis] = MouseScrollEvent(event);
+    scrollEvent(axis) = MouseScrollEvent(event);
 }

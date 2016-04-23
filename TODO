@@ -2,8 +2,9 @@ DONE Get UFO motion working.
 DONE Tie the terrain POI back to the camera.
 DONE Draw tris as solid strips.
 DONE Allow speed control of the UFO with the mouse wheel.
-Enable and use diffuse lighting; compress day/night for better effect.
-Figure out if we need to move to abstract units for this. Is there a way we can test precision over the range we need?
+DONE Figure out if we need to move to abstract units for this. Is there a way
+     we can test precision over the range we need? Yes, see comments in terrain.h.
+Enable and use diffuse lighting; compress day/night for better effect. 
 Ensure terrain detail level joins are working. Employ the POI and lighting for this.
 Apply a colormap. Create the code to load store and manage diffuse color textures.
 Create controls for adjusting a fractal brownian heightmap and use it to get reasonable terrain.
