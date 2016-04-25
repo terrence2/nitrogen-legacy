@@ -24,13 +24,19 @@ using namespace glm;
 using namespace std;
 
 glit::Planet::Planet(shared_ptr<Sun>& s)
-  : terrain_() //km
+  : terrain_(6371000.0) // m
   , rotation(0.f)
   , sun(s)
 {}
 
 glit::Planet::~Planet()
 {
+}
+
+void
+glit::Planet::setPlayer(std::shared_ptr<Player>& p)
+{
+    player = p;
 }
 
 void
@@ -50,8 +56,15 @@ glit::Planet::draw(const glit::Camera& camera)
     auto model = rotate(mat4(1.f), rotation, vec3(0.0f, 1.0f, 0.0f));
     auto modelviewproj = camera.transform() * model;
 
-    auto mesh = terrain_.uploadAsWireframe(camera.viewPosition(), camera.viewDirection());
-    //auto mesh = terrain_.uploadAsTriStrips(camera.viewPosition(), camera.viewDirection());
+    auto playerp = player.lock();
+    if (!playerp)
+        throw runtime_error("no player pointer in terrain draw");
+
+    auto pos = playerp->viewPosition();
+    auto dir = playerp->viewDirection();
+
+    //auto mesh = terrain_.uploadAsWireframe(pos, camera.viewDirection());
+    auto mesh = terrain_.uploadAsTriStrips(pos, camera.viewDirection());
     //auto mesh = terrain_.uploadAsTriStrips(vec3(0.f, 6300.f, 0.f), vec3(0.f, 0.f, 0.f));
     mesh->draw(modelviewproj, camera.viewPosition(), sunp->sunDirection());
 }

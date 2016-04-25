@@ -1,1 +1,1 @@
-../build-emscripten-debug/fsim.js
+../build-emscripten-release/fsim.js

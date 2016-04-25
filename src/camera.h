@@ -30,8 +30,8 @@ class Camera
     glm::vec3 direction;
     glm::vec3 up;
 
-    constexpr static float NearDistance = 1.f / 6371000.f;
-    constexpr static float FarDistance = 10.f;
+    constexpr static float NearDistance = 1.f;
+    constexpr static float FarDistance = 1000000.f;
 
     Camera(Camera&&) = delete;
     Camera(const Camera&) = delete;

@@ -34,12 +34,17 @@ class Planet : public Entity
     // Reference to the sun.
     std::weak_ptr<Sun> sun;
 
+    // Reference to the player for position info.
+    std::weak_ptr<Player> player;
+
     explicit Planet(Planet&&) = delete;
     explicit Planet(const Planet&) = delete;
 
   public:
     explicit Planet(std::shared_ptr<Sun>& s);
     ~Planet() override;
+
+    void setPlayer(std::shared_ptr<Player>& p);
 
     const Terrain& terrain() const { return terrain_; }
 

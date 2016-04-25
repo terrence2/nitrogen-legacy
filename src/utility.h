@@ -24,6 +24,15 @@
 
 #include <glm/glm.hpp>
 
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
+
+inline std::ostream&
+operator<< (std::ostream &stream, const glm::dvec3 &v)
+{
+    return stream << "{" << v.x << "," << v.y << "," << v.z << "}";
+}
+
 inline std::ostream&
 operator<< (std::ostream &stream, const glm::vec3 &v)
 {

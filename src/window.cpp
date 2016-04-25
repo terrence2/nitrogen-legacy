@@ -13,6 +13,10 @@
 
 #include "window.h"
 
+#ifdef __EMSCRIPTEN__
+# include <emscripten.h>
+# include <html5.h>
+#endif
 #include <iostream>
 
 using namespace std;
@@ -36,14 +40,9 @@ glit::Window::init()
     glfwSetErrorCallback(errorCallback);
 
     // Ensure we get a webgl compatible context.
-#ifdef __EMSCRIPTEN__
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
-#else
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-#endif
 
     // Use "windowed fullscreen" by getting the current settings.
     int width = 1280;
@@ -125,7 +124,6 @@ glit::Window::keyCallback(GLFWwindow* window, int key, int scancode,
                           int action, int mods)
 {
     Window* self = fromGLFW(window);
-    printf("key is: %d %d %d %d\n", key, scancode, action, mods);
     self->bindings->dispatchKeyEvent(key, scancode, action, mods);
 }
 

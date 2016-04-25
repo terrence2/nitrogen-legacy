@@ -12,8 +12,12 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "camera.h"
 
+#include <iostream>
+
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+
+#include "utility.h"
 
 using namespace glm;
 using namespace std;

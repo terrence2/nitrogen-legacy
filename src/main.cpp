@@ -144,6 +144,7 @@ do_main()
     auto planet = make_shared<glit::Planet>(sun);
 
     auto player = make_shared<glit::Player>(planet);
+    planet->setPlayer(player);
     dispatcher.onEdge("+ufoLeft", [&](){player->ufoStartLeft();});
     dispatcher.onEdge("-ufoLeft", [&](){player->ufoStopLeft();});
     dispatcher.onEdge("+ufoRight", [&](){player->ufoStartRight();});
@@ -218,7 +219,7 @@ do_main()
 void
 do_loop()
 {
-    //glit::util::Timer t("frame");
+    glit::util::Timer t("frame");
 
     static double lastFrameTime = 0.0;
     double now = glfwGetTime();
@@ -238,9 +239,14 @@ do_loop()
 
     // Slave the camera to the player.
     glit::Player* player = dynamic_cast<glit::Player*>(gWorld.entities[0].get());
+    gWorld.camera.warp(vec3(0.f, 0.f, 0.f),
+                       player->viewDirection(),
+                       player->viewUp());
+    /*
     gWorld.camera.warp(player->viewPosition(),
                        player->viewDirection(),
                        player->viewUp());
+    */
     /*
     gWorld.camera.warp(vec3(0.f, 20000.f, 0.f),
                        vec3(0.f, -1.f, 0.f),

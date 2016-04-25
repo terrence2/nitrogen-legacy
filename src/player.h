@@ -31,50 +31,54 @@ class Player : public Entity
     std::weak_ptr<Planet> planet;
 
     // State.
-    glm::vec3 pos; // head location
-    glm::quat dir; // view direction
+    glm::dvec3 pos; // head location
+    glm::dquat dir; // view direction
 
     // Motion request from keyboard.
     glm::vec3 motionReq;
     glm::vec3 rotateReq;
     glm::vec2 rotateAxis;
-    float speed;
+    double speed;
 
   public:
     Player(std::shared_ptr<Planet>& p);
 
-    const glm::vec3& viewPosition() const { return pos; }
-    glm::vec3 viewDirection() const { return dir * glm::vec3(0.f, 0.f, -1.f); }
-    glm::vec3 viewUp() const { return dir * glm::vec3(0.f, 1.f, 0.f); }
+    const glm::dvec3& viewPosition() const { return pos; }
+    glm::vec3 viewDirection() const { return glm::vec3(dir * glm::dvec3(0.f, 0.f, -1.f)); }
+    glm::vec3 viewUp() const { return glm::vec3(dir * glm::dvec3(0.f, 1.f, 0.f)); }
 
+    void nullIfExpected(float& ref, float expect) {
+        if (ref == expect)
+            ref = 0.f;
+    }
     void ufoStartLeft() { motionReq[0] = -1.f; }
-    void ufoStopLeft() { motionReq[0] = 0.f; }
+    void ufoStopLeft() { nullIfExpected(motionReq[0], -1.f); }
     void ufoStartRight() { motionReq[0] = 1.f; }
-    void ufoStopRight() { motionReq[0] = 0.f; }
+    void ufoStopRight() { nullIfExpected(motionReq[0], 1.f); }
     void ufoStartForward() { motionReq[2] = -1.f; }
-    void ufoStopForward() { motionReq[2] = 0.f; }
+    void ufoStopForward() { nullIfExpected(motionReq[2], -1.f); }
     void ufoStartBackward() { motionReq[2] = 1.f; }
-    void ufoStopBackward() { motionReq[2] = 0.f; }
+    void ufoStopBackward() { nullIfExpected(motionReq[2], 1.f); }
     void ufoStartUp() { motionReq[1] = 1.f; }
-    void ufoStopUp() { motionReq[1] = 0.f; }
+    void ufoStopUp() { nullIfExpected(motionReq[1], 1.f); }
     void ufoStartDown() { motionReq[1] = -1.f; }
-    void ufoStopDown() { motionReq[1] = 0.f; }
+    void ufoStopDown() { nullIfExpected(motionReq[1], -1.f); }
 
     void ufoStartRotateDown() { rotateReq[0] = -1.f; }
-    void ufoStopRotateDown() { rotateReq[0] = 0.f; }
+    void ufoStopRotateDown() { nullIfExpected(rotateReq[0], -1.f); }
     void ufoStartRotateUp() { rotateReq[0] = 1.f; }
-    void ufoStopRotateUp() { rotateReq[0] = 0.f; }
+    void ufoStopRotateUp() { nullIfExpected(rotateReq[0], 1.f); }
     void ufoStartRotateLeft() { rotateReq[1] = 1.f; }
-    void ufoStopRotateLeft() { rotateReq[1] = 0.f; }
+    void ufoStopRotateLeft() { nullIfExpected(rotateReq[1], 1.f); }
     void ufoStartRotateRight() { rotateReq[1] = -1.f; }
-    void ufoStopRotateRight() { rotateReq[1] = 0.f; }
+    void ufoStopRotateRight() { nullIfExpected(rotateReq[1], -1.f); }
     void ufoStartRotateCCW() { rotateReq[2] = 1.f; }
-    void ufoStopRotateCCW() { rotateReq[2] = 0.f; }
+    void ufoStopRotateCCW() { nullIfExpected(rotateReq[2], 1.f); }
     void ufoStartRotateCW() { rotateReq[2] = -1.f; }
-    void ufoStopRotateCW() { rotateReq[2] = 0.f; }
+    void ufoStopRotateCW() { nullIfExpected(rotateReq[2], -1.f); }
 
-    constexpr static float MaxSpeed = 0.1f;
-    constexpr static float MinSpeed = 0.0000001f;
+    constexpr static double MaxSpeed = 1000.0;
+    constexpr static double MinSpeed = 0.25;
     void ufoAccelerate() { if (speed < MaxSpeed) speed *= 2.f; }
     void ufoDecelerate() { if (speed > MinSpeed) speed /= 2.f; }
 

@@ -32,13 +32,14 @@ namespace glit {
 class Terrain
 {
   public:
-    Terrain();
+    Terrain(double r);
     ~Terrain();
-    Mesh* uploadAsWireframe(glm::vec3 viewPosition, glm::vec3 viewDirection);
-    Mesh* uploadAsTriStrips(glm::vec3 viewPosition, glm::vec3 viewDirection);
+    Mesh* uploadAsWireframe(const glm::dvec3& viewPosition,
+                            const glm::dvec3& viewDirection);
+    Mesh* uploadAsTriStrips(const glm::dvec3& viewPosition,
+                            const glm::dvec3& viewDirection);
 
-    float heightAt(glm::vec3 pos) const;
-    float heightAt(glm::vec2 latlon) const;
+    double heightAt(glm::dvec3 pos) const;
 
   private:
     std::shared_ptr<Program> programPoints;
@@ -46,6 +47,7 @@ class Terrain
     Mesh wireframeMesh;
     Mesh tristripMesh;
 
+    double radius;
 
     // A facet is the subdividable piece of the terrain.
     //
@@ -76,19 +78,38 @@ class Terrain
         //         \/
         //
 
-        struct Vertex {
-            // FIXME: Store the verts in lat/lon for transfer to the GPU?
+        // Given the world scale, we have to compute everything in double
+        // precision to avoid juddering on small movements. This is not a huge
+        // slowdown since we have to compute everything on the CPU anyway. For
+        // upload, we translate everything to be camera origin before
+        // truncating to floats so that near verticies are all small and have
+        // comparatively high precision.
+        struct CPUVertex {
+            glm::dvec3 position;
+            glm::vec3 normal;
+        };
+        struct GPUVertex {
             glm::vec3 aPosition;
+            glm::vec3 aNormal;
+
+            static GPUVertex fromCPU(const CPUVertex& v,
+                                     const Facet& owner,
+                                     const glm::dvec3& viewPosition);
 
             static void describe(std::vector<VertexAttrib>& attribs) {
-                attribs.push_back(MakeGLMVertexAttrib(Vertex, aPosition, false));
+                attribs.push_back(MakeGLMVertexAttrib(GPUVertex, aPosition, false));
+                attribs.push_back(MakeGLMVertexAttrib(GPUVertex, aNormal, false));
             }
         };
+
         Facet* children; // 4 wide
 
+        // Cached normal to speed up vertex normal computations.
+        glm::vec3 normal;
+
         struct VertexAndIndex {
-            Vertex vertex;   // Refers to baseVerts or childVerts.
-            uint32_t index;  // Reset by reshape. Invalid is -1.
+            CPUVertex vertex; // Refers to baseVerts or childVerts.
+            uint32_t index; // Reset by reshape. Invalid is -1.
         };
         VertexAndIndex* verts[3];
 
@@ -97,43 +118,13 @@ class Terrain
         VertexAndIndex childVerts[3];
 
         Facet() {
-            memset(this, 0, sizeof(Facet));
+            //memset(this, 0, sizeof(Facet));
         }
+        void init(VertexAndIndex* v0, VertexAndIndex* v1, VertexAndIndex* v2);
     };
 
     std::vector<Facet::VertexAndIndex> baseVerts;
 
-
-    // Precision
-    // =========
-    //
-    // 23 bits of precision is not really enough, but we can try
-    // to minimize the error. In particular, rather than using realistic units
-    // we set the terrain to a height of 1.0. This gives us an error in meters
-    // at the surface of:
-    //
-    //   (gdb) p 1.0 / (6371.0 * 1000.0)
-    //   $5 = 1.5696123057604769e-07
-    //   (gdb) p 1.0f / (6371.0f * 1000.0f)
-    //   $6 = 1.56961221e-07
-    //   (gdb) p 1.5696123057604769e-07 - 1.56961221e-07
-    //   $23 = 9.5760476847870859e-15
-    //
-    // Compared to using real units:
-    //
-    //   (gdb) p 6371001.0 / 6371000.0
-    //   $24 = 1.0000001569612305
-    //   (gdb) p 6371001.0f / 6371000.0f
-    //   $25 = 1.00000012
-    //   (gdb) p 1.0000001569612305 - 1.00000012
-    //   $26 = 3.6961230520660138e-08
-    //
-    // ~7 orders of magnitude more precision for things happening on or near
-    // the surface.
-    //
-    // More importantly, it lets us set a really near back frustum (like 10)
-    // which gives us very little z tearing. It also helps keep shaders from
-    // turning into a random hash far away from the camera.
 
     // LOD
     // ===
@@ -147,23 +138,7 @@ class Terrain
     // distance calculations in the squared space to avoid the sqrt. This is
     // all multiplied out in the constructor into the real table.
     const static size_t MaxSubdivisions = 23;
-    const static float SubdivisionDistance[MaxSubdivisions];
-    float SubdivisionRadiusSquared[MaxSubdivisions];
     float EdgeLengths[MaxSubdivisions];
-    //
-    //
-    // Units and Numeric Precision
-    // ===========================
-    //
-    // Ideally we'd express everything in meters and be done. That would,
-    // however, put our interesting computations (on and just above the surface
-    // of the planet) at around 6,371,000m for an earth-like terrain. Since the
-    // max float integer is 16,777,216, this is venturing dangerously close
-    // into loss-of-precision territory, right where we care about it most.
-    // Instead, we use kilometers for all of the calculations here. This puts
-    // the surface calculations back in the thousands and leaves us plenty of
-    // room for centimeter granularity in the near field.
-    float radius;
     //
     //
     // Allocation
@@ -191,38 +166,36 @@ class Terrain
     //float levelAngles[25];
     //static void buildLevelAngles(float angle0) const;
 
-    static glm::vec3 bisect(glm::vec3 v0, glm::vec3 v1);
-    void subdivideFacet(glm::vec3 p0, glm::vec3 p1, glm::vec3 p2,
-                        glm::vec3* c0, glm::vec3* c1, glm::vec3* c2) const;
-    void reshape(glm::vec3 viewPosition, glm::vec3 viewDirection);
+    static glm::dvec3 bisect(glm::dvec3 v0, glm::dvec3 v1);
+    void subdivideFacet(glm::dvec3 p0, glm::dvec3 p1, glm::dvec3 p2,
+                        glm::dvec3* c0, glm::dvec3* c1, glm::dvec3* c2) const;
+    void reshape(const glm::dvec3& viewPosition,
+                 const glm::dvec3& viewDirection);
     void reshapeN(size_t level, Facet& self,
-                  glm::vec3 viewPosition, glm::vec3 viewDirection);
-
-    // Given a |facet| at |level|, fill with facet's verts and recurse
-    // if more detail is needed.
-    Facet* buildDisplayVerts(uint8_t level, Facet& parent, size_t parentBase,
-                           Facet* self, uint8_t triPosition,
-                           glm::vec3 poi, glm::vec3 viewDirection,
-                           std::vector<Facet::Vertex>& verts,
-                           std::vector<uint32_t>& indices) const;
+                  const glm::dvec3& viewPosition,
+                  const glm::dvec3& viewDirection);
+    double reshapeHorizon;
 
     // Given that the tree has already been balanced for the active view,
     // walk current tree and emit verticies for all active children, inserting
     // joining tris as necessary between levels.
-    void drawSubtreeTriStrip(std::vector<Facet::Vertex>& verts,
+    void drawSubtreeTriStrip(const glm::dvec3& viewPosition,
+                             std::vector<Facet::GPUVertex>& verts,
                              std::vector<uint32_t>& indices);
-    void drawSubtreeTriStripN(Facet& facet,
-                              std::vector<Facet::Vertex>& verts,
+    void drawSubtreeTriStripN(Facet& facet, const glm::dvec3& viewPosition,
+                              std::vector<Facet::GPUVertex>& verts,
                               std::vector<uint32_t>& indices) const;
 
     // Spit out complete triangles for all faces. We don't need joins because
     // they would just overlay lines that are already present.
-    void drawSubtreeWireframe(Facet& facet,
-                              std::vector<Facet::Vertex>& verts,
+    void drawSubtreeWireframe(Facet& facet, const glm::dvec3& viewPosition,
+                              std::vector<Facet::GPUVertex>& verts,
                               std::vector<uint32_t>& indices) const;
 
     static uint32_t pushVertex(Facet::VertexAndIndex* insert,
-                               std::vector<Facet::Vertex>& verts);
+                               const Facet& owner,
+                               const glm::dvec3& viewPosition,
+                               std::vector<Facet::GPUVertex>& verts);
     void deleteChildren(Facet& self);
 
     // The base icosohedron points and initial facets.

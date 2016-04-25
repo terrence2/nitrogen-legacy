@@ -27,15 +27,15 @@ glit::Player::Player(std::shared_ptr<Planet>& p)
   , motionReq(0.f, 0.f, 0.f)
   , rotateReq(0.f, 0.f, 0.f)
   , rotateAxis(0.f, 0.f)
-  , speed(100000.f / 6371000.f)
+  , speed(1.0)
 {
     // FIXME: currently we're just setting ourself at 0,0 lat/lon.
     // I'm not sure what we actually want to do to initialize the
     // player character.
     auto& terrain = p->terrain();
 
-    vec2 initial(0.f, 0.f);
-    pos = euclidean(initial) * terrain.heightAt(initial);
+    dvec3 initial(0.f, 0.f, 1.f);
+    pos = initial * (terrain.heightAt(initial) + 1000.0);
 
     // pointing north at the equator.
     dir = angleAxis(float(M_PI) / 2.f, vec3(1.f, 0.f, 0.f));
@@ -45,21 +45,21 @@ void
 glit::Player::tick(double t, double dt)
 {
     // Apply rotation requested via keyboard buttons.
-    quat qX = angleAxis(rotateReq[0] * float(dt) / 2.f, vec3(1.f, 0.f, 0.f));
-    quat qY = angleAxis(rotateReq[1] * float(dt) / 2.f, vec3(0.f, 1.f, 0.f));
-    quat qZ = angleAxis(rotateReq[2] * float(dt) / 2.f, vec3(0.f, 0.f, 1.f));
+    dquat qX = angleAxis(rotateReq[0] * dt / 2.0, dvec3(1.f, 0.f, 0.f));
+    dquat qY = angleAxis(rotateReq[1] * dt / 2.0, dvec3(0.f, 1.f, 0.f));
+    dquat qZ = angleAxis(rotateReq[2] * dt / 2.0, dvec3(0.f, 0.f, 1.f));
     dir = dir * qX * qY * qZ;
 
     // Apply rotation requested via mouse movement.
-    quat qXm = angleAxis(rotateAxis[0] * 0.001f, vec3(1.f, 0.f, 0.f));
-    quat qYm = angleAxis(rotateAxis[1] * 0.001f, vec3(0.f, 1.f, 0.f));
+    dquat qXm = angleAxis(rotateAxis[0] * 0.001, dvec3(1.f, 0.f, 0.f));
+    dquat qYm = angleAxis(rotateAxis[1] * 0.001, dvec3(0.f, 1.f, 0.f));
     dir = dir * qXm * qYm;
     rotateAxis[0] = 0.f;
     rotateAxis[1] = 0.f;
 
     // Apply button motion requests.
     if (length(motionReq) != 0.f)
-        pos += speed * (dir * normalize(motionReq));
+        pos += speed * (dir * normalize(dvec3(motionReq)));
 }
 
 void
