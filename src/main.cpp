@@ -239,14 +239,14 @@ do_loop()
 
     // Slave the camera to the player.
     glit::Player* player = dynamic_cast<glit::Player*>(gWorld.entities[0].get());
+    /*
     gWorld.camera.warp(vec3(0.f, 0.f, 0.f),
                        player->viewDirection(),
                        player->viewUp());
-    /*
+    */
     gWorld.camera.warp(player->viewPosition(),
                        player->viewDirection(),
                        player->viewUp());
-    */
     /*
     gWorld.camera.warp(vec3(0.f, 20000.f, 0.f),
                        vec3(0.f, -1.f, 0.f),

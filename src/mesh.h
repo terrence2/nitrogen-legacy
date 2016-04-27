@@ -29,8 +29,6 @@ class Drawable
     size_t start;
     size_t count;  // 0 for all.
 
-    Drawable(const Drawable&) = delete;
-
   public:
     Drawable(std::shared_ptr<Program> program,
              GLenum mode,
@@ -38,6 +36,7 @@ class Drawable
              std::shared_ptr<IndexBuffer> indices,
              size_t start = 0, size_t count = 0);
     Drawable(Drawable&& other);
+    Drawable(const Drawable& other);
 
     std::shared_ptr<VertexBuffer> vertexBuffer() const {
         return vb;

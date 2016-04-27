@@ -32,11 +32,24 @@ glit::Camera::Camera()
                              NearDistance, FarDistance);
 }
 
+glit::Camera::Camera(const Camera& other)
+  : projection(other.projection)
+  , position(other.position)
+  , direction(other.direction)
+  , up(other.up)
+{}
+
 void
 glit::Camera::screenSizeChanged(float width, float height)
 {
     projection = perspective(pi<float>() * 0.25f, width / height,
                              NearDistance, FarDistance);
+}
+
+void
+glit::Camera::move(const vec3& pos)
+{
+    position = pos;
 }
 
 void

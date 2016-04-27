@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "camera.h"
 #include "icosphere.h"
 #include "mesh.h"
 #include "shader.h"
@@ -34,20 +35,24 @@ class Terrain
   public:
     Terrain(double r);
     ~Terrain();
+    void draw(const Camera& camera, glm::vec3 sunDirection);
+
+    double heightAt(glm::dvec3 pos) const;
+    double radius() const { return radius_; }
+
+  private:
+    std::shared_ptr<Program> programLand;
+    static std::shared_ptr<Program> makeLandProgram();
+    std::shared_ptr<Program> programWater;
+    static std::shared_ptr<Program> makeWaterProgram();
+    Mesh wireframeMesh;
+    Mesh tristripMesh;
+
     Mesh* uploadAsWireframe(const glm::dvec3& viewPosition,
                             const glm::dvec3& viewDirection);
     Mesh* uploadAsTriStrips(const glm::dvec3& viewPosition,
                             const glm::dvec3& viewDirection);
-
-    double heightAt(glm::dvec3 pos) const;
-
-  private:
-    std::shared_ptr<Program> programPoints;
-    static std::shared_ptr<Program> makePointsProgram();
-    Mesh wireframeMesh;
-    Mesh tristripMesh;
-
-    double radius;
+    double radius_;
 
     // A facet is the subdividable piece of the terrain.
     //
@@ -123,48 +128,29 @@ class Terrain
         void init(VertexAndIndex* v0, VertexAndIndex* v1, VertexAndIndex* v2);
     };
 
+    // The topmost verts and facets.
     std::vector<Facet::VertexAndIndex> baseVerts;
+    Facet facets[20];
 
-
-    // LOD
-    // ===
-    //
-    // The number of tris we want to show for any particular patch is going to
-    // vary by its angle to us, it's relative smoothness, its height relative
-    // to the surroundings, how interesting the content on it is, etc. Instead,
-    // to simplify the computation (as we currently have to do this all on the
-    // CPU), we use the distance alone. The following table is expressed in
-    // terms of Radii of the planetary body. Moreover, we want to make the
-    // distance calculations in the squared space to avoid the sqrt. This is
-    // all multiplied out in the constructor into the real table.
+    // LOD: The number of tris we want to show for any particular patch is
+    // going to vary by its angle to us, it's relative smoothness, its height
+    // relative to the surroundings, how interesting the content on it is, etc.
+    // Instead, to simplify the computation (as we currently have to do this
+    // all on the CPU), we use the distance alone. The following table is
+    // expressed in terms of Radii of the planetary body. Moreover, we want to
+    // make the distance calculations in the squared space to avoid the sqrt.
+    // This is all multiplied out in the constructor into the real table.
     const static size_t MaxSubdivisions = 23;
     float EdgeLengths[MaxSubdivisions];
-    //
-    //
-    // Allocation
-    // ==========
-    //
-    // Fast allocation, and more importantly deallocation or reuse, is critical
-    // for having even frame rates, since this scheme requires potentially 10's of
-    // thousands of allocations and deallocations per frame, if the camera is
-    // moving fast or low.
-    //
-    // Note: handwavy as this is still TODO.
-    // All allocations are fixed size, so this is actually fairly easy to
-    // achieve. Allocations check a free list first. If the free list is empty,
-    // they bump allocate from the current end. Deallocation links the empty
-    // facet into the head of the free list. This is, naturally, going to spike
-    // to the maximum used size and never drop. We could compact, but in order
-    // to maintain predictable performance, instead we simply cap the
-    // allocation maximum and use a breadth first approach when visiting the
-    // tree so that we only lose fine detail if we run out of room in the Facet
-    // heap. This allows us to pre-allocate our entire terrain cache and avoid
-    // thrashing with the rest of the system.
 
-    // Each subdivision doubles angular resulution. Provide a LUT to get
-    // this resolution for any given level.
-    //float levelAngles[25];
-    //static void buildLevelAngles(float angle0) const;
+    // Scale: We display the resulting verticies on a camera with a fairly
+    // short far plane. To allow this, we scale the verts down to a smaller,
+    // proportional size when drawing. This does not murder our precision
+    // because we have already displaced the verticies to have the camera as
+    // the origin, so the scaling should fit in the low digits of a float, as
+    // long as its not too extreme.
+    //constexpr static double CameraScale = 1.0 / 100.0;
+    constexpr static double CameraScale = 10000.0;
 
     static glm::dvec3 bisect(glm::dvec3 v0, glm::dvec3 v1);
     void subdivideFacet(glm::dvec3 p0, glm::dvec3 p1, glm::dvec3 p2,
@@ -174,7 +160,6 @@ class Terrain
     void reshapeN(size_t level, Facet& self,
                   const glm::dvec3& viewPosition,
                   const glm::dvec3& viewDirection);
-    double reshapeHorizon;
 
     // Given that the tree has already been balanced for the active view,
     // walk current tree and emit verticies for all active children, inserting
@@ -198,8 +183,6 @@ class Terrain
                                std::vector<Facet::GPUVertex>& verts);
     void deleteChildren(Facet& self);
 
-    // The base icosohedron points and initial facets.
-    Facet facets[20];
 };
 
 } // namespace glit

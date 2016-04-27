@@ -44,14 +44,20 @@ glit::Terrain::subdivideFacet(dvec3 p0, dvec3 p1, dvec3 p2,
 }
 
 glit::Terrain::Terrain(double r)
-  : programPoints(makePointsProgram())
-  , wireframeMesh(Drawable(programPoints, GL_LINES,
+  : programLand(makeLandProgram())
+  , programWater(makeWaterProgram())
+  , wireframeMesh(Drawable(programLand, GL_LINES,
            make_shared<VertexBuffer>(VertexDescriptor::fromType<Facet::GPUVertex>()),
            make_shared<IndexBuffer>()))
-  , tristripMesh(Drawable(programPoints, GL_TRIANGLE_STRIP,
+  , tristripMesh(std::vector<Drawable>{
+       Drawable(programLand, GL_TRIANGLE_STRIP,
            make_shared<VertexBuffer>(VertexDescriptor::fromType<Facet::GPUVertex>()),
-           make_shared<IndexBuffer>()))
-  , radius(r)
+           make_shared<IndexBuffer>()),
+       Drawable(programWater, GL_TRIANGLES,
+           make_shared<VertexBuffer>(VertexDescriptor::fromType<IcoSphere::Vertex>()),
+           make_shared<IndexBuffer>()),
+       })
+  , radius_(r)
 {
     // Use an IcoSphere to find the initial, static corners.
     IcoSphere sphere(0);
@@ -62,12 +68,22 @@ glit::Terrain::Terrain(double r)
                 uint32_t(-1)});
         ++i;
     }
-
     i = 0;
     for (auto& face : sphere.faceList()) {
         facets[i].init(&baseVerts[face.i0], &baseVerts[face.i1], &baseVerts[face.i2]);
         ++i;
     }
+
+    // Copy verts from an icosphere for our water.
+    IcoSphere water(4);
+    tristripMesh.drawable(1).vertexBuffer()->upload(water.vertices());
+    vector<uint16_t> indices;
+    for (auto& face : water.faceList()) {
+        indices.push_back(face.i0);
+        indices.push_back(face.i2);
+        indices.push_back(face.i1);
+    }
+    tristripMesh.drawable(1).indexBuffer()->upload(indices);
 
     // We want a falloff so that we get more subdivisions near the camera and
     // they fall away in the distance. Ideally, we'd like the falloff to be
@@ -76,14 +92,14 @@ glit::Terrain::Terrain(double r)
     //
     // Maybe something like:
     //   y = 1 - ln(x + 1) / 2
-    float ang0 = acosf(dot(facets[0].verts[0]->vertex.position / radius,
-                           facets[0].verts[1]->vertex.position / radius));
-    float d0 = (radius * sin(ang0 / 2.f)) * 2.f;
+    float ang0 = acosf(dot(facets[0].verts[0]->vertex.position / radius_,
+                           facets[0].verts[1]->vertex.position / radius_));
+    float d0 = (radius_ * sin(ang0 / 2.f)) * 2.f;
     cout << "angle: " << ang0 << "; dist: " << d0 << endl;
     EdgeLengths[0] = d0;
     for (size_t i = 1; i < util::ArrayLength(EdgeLengths); ++i) {
         ang0 = ang0 / 2.0f;
-        d0 = (radius * sin(ang0 / 2.f)) * 2.f;
+        d0 = (radius_ * sin(ang0 / 2.f)) * 2.f;
         cout << "angle: " << ang0 << "; dist: " << d0 << endl;
         EdgeLengths[i] = d0;
     }
@@ -97,7 +113,7 @@ glit::Terrain::~Terrain()
 }
 
 /* static */ shared_ptr<glit::Program>
-glit::Terrain::makePointsProgram()
+glit::Terrain::makeLandProgram()
 {
     auto VertexDesc = VertexDescriptor::fromType<Facet::GPUVertex>();
     VertexShader vs(
@@ -105,10 +121,14 @@ glit::Terrain::makePointsProgram()
             ///////////////////////////////////////////////////////////////////
             #version 100
             precision highp float;
+
             uniform mat4 uModelViewProj;
             uniform vec3 uCameraPosition;
+            uniform float uRadius;
+
             attribute vec3 aPosition;
             attribute vec3 aNormal;
+
             varying vec3 vColor;
             varying vec3 vNormal;
 
@@ -116,7 +136,6 @@ glit::Terrain::makePointsProgram()
             {
                 gl_Position = uModelViewProj * vec4(aPosition, 1.0);
                 vColor = vec3(1.0);
-                //vNormal = normalize((vFace0N + vFace1N + vFace2N) / 3.0);
                 vNormal = aNormal;
                 //vLatLon = posLatLon;
             }
@@ -144,40 +163,88 @@ glit::Terrain::makePointsProgram()
                 Program::MakeInput<mat4>("uModelViewProj"),
                 Program::MakeInput<mat4>("uCameraPosition"),
                 Program::MakeInput<vec3>("uSunDirection"),
+                Program::MakeInput<float>("uRadius"),
             });
 }
 
-#if 0
-glit::Mesh
-glit::Terrain::uploadAsPoints() const
+/* static */ shared_ptr<glit::Program>
+glit::Terrain::makeWaterProgram()
 {
-    util::Timer t("Terrain::upload");
+    auto VertexDesc = VertexDescriptor::fromType<IcoSphere::Vertex>();
+    VertexShader vs(
+            R"SHADER(
+            ///////////////////////////////////////////////////////////////////
+            #version 100
+            precision highp float;
+            uniform mat4 uModelViewProj;
+            uniform vec3 uCameraPosition;
+            uniform float uRadius;
 
-    vector<Facet::GPUVertex> verts;
-    for (size_t i = 0; i < 20; ++i) {
-        verts.insert(verts.end(),
-                     &facets[i].verts[0],
-                     &facets[i].verts[6]);
-    }
-    auto vb = VertexBuffer::make(verts);
+            attribute vec3 aPosition;
 
-    vector<uint16_t> indices;
-    for (uint16_t i = 0; i < verts.size(); ++i)
-        indices.push_back(i);
-    auto ib = IndexBuffer::make(indices);
+            varying vec3 vColor;
+            varying vec3 vNormal;
 
-    return Mesh(Drawable(pointsProgram(), GL_POINTS, move(vb), move(ib)));
+            void main()
+            {
+                // Note: the scale here must match Terrain::CameraScale.
+                vec3 actual = ((aPosition * uRadius) - uCameraPosition) / 10000.0;
+                gl_Position = uModelViewProj * vec4(actual, 1.0);
+                vColor = vec3(0.0, 0.0, 1.0);
+                vNormal = normalize(aPosition);
+            }
+            ///////////////////////////////////////////////////////////////////
+            )SHADER",
+            VertexDesc);
+    FragmentShader fs(
+            R"SHADER(
+            ///////////////////////////////////////////////////////////////////
+            #version 100
+            precision highp float;
+            const float PI = 3.1415925;
+            uniform vec3 uSunDirection;
+            varying vec3 vNormal;
+            varying vec3 vColor;
+
+            void main() {
+                float diffuse = max(1.0, dot(vNormal, -uSunDirection));
+                gl_FragData[0] = vec4(vColor * diffuse, 1.0);
+            }
+            ///////////////////////////////////////////////////////////////////
+            )SHADER"
+        );
+    return make_shared<Program>(move(vs), move(fs), vector<UniformDesc>{
+                Program::MakeInput<mat4>("uModelViewProj"),
+                Program::MakeInput<mat4>("uCameraPosition"),
+                Program::MakeInput<vec3>("uSunDirection"),
+                Program::MakeInput<float>("uRadius"),
+            });
 }
-#endif
+
+void
+glit::Terrain::draw(const Camera& camera, glm::vec3 sunDirection)
+{
+    auto mesh = uploadAsTriStrips(camera.viewPosition(), camera.viewDirection());
+
+    // We upload vertices relative to the camera position. This allows us to
+    // "pre-transform" the verticies using double precision, allowing us to
+    // have a both precise movement and planetary scales. This means we need to
+    // do the draw transformed back to origin.
+    Camera cam(camera);
+    cam.move(vec3(0.f, 0.f, 0.f));
+
+    mesh->draw(cam.transform(), camera.viewPosition(),
+               sunDirection, float(radius_));
+}
 
 double
 glit::Terrain::heightAt(dvec3 dpos) const
 {
-    const static float freq = 2000.0f;
-    double h = radius + 10000.0 * double(raw_noise_3d(dpos.x,
+    //const static float freq = 2000.0f;
+    double h = radius_ + 20000.0 * double(raw_noise_3d(dpos.x,
                                                     dpos.y,
                                                     dpos.z));
-    cout << "h: " << (h - radius) << endl;
+    //cout << "h: " << (h - radius_) << endl;
     return h;
 }
 
@@ -255,8 +322,6 @@ glit::Terrain::reshape(const dvec3& viewPosition, const dvec3& viewDirection)
     for (auto& vert : baseVerts)
         vert.index = uint32_t(-1);
 
-    reshapeHorizon = acos(radius / (radius + 10000.0)) +
-                     acos(radius / glm::length(viewPosition));
     for (size_t i = 0; i < 20; ++i)
         reshapeN(0, facets[i], viewPosition, viewDirection);
 }
@@ -324,8 +389,7 @@ glit::Terrain::Facet::GPUVertex::fromCPU(const CPUVertex& v,
                                          const Facet& owner,
                                          const dvec3& viewPosition)
 {
-    dvec3 actual = (v.position - viewPosition) / 100.0;
-    //cout << "pushing: " << actual << endl;
+    dvec3 actual = (v.position - viewPosition) / CameraScale;
     return GPUVertex{vec3(actual), owner.normal};
 }
 

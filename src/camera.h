@@ -30,14 +30,17 @@ class Camera
     glm::vec3 direction;
     glm::vec3 up;
 
-    constexpr static float NearDistance = 1.f;
-    constexpr static float FarDistance = 1000000.f;
+    // Although we routinely draw objects that are millions of km away, we take
+    // care to scale the verticies in these cases, allowing us to get away with
+    // a much shorter far plane to avoid z-tearing close by.
+    constexpr static float NearDistance = 0.1f;
+    constexpr static float FarDistance = 1000.f;
 
     Camera(Camera&&) = delete;
-    Camera(const Camera&) = delete;
 
   public:
     Camera();
+    Camera(const Camera&);
 
     const glm::vec3& viewPosition() const { return position; }
     const glm::vec3& viewDirection() const { return direction; }
@@ -45,6 +48,7 @@ class Camera
 
     void screenSizeChanged(float width, float height);
     void warp(const glm::vec3& pos, const glm::vec3& dir, const glm::vec3& u);
+    void move(const glm::vec3& pos);
 
     // Combined projection and view, suitable for multiplying with a model
     // to get a final transform matrix.

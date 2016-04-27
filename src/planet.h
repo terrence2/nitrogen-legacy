@@ -28,9 +28,6 @@ class Planet : public Entity
     // The terrain state. Updated by providing the camera in draw.
     Terrain terrain_;
 
-    // The current rotational state.
-    float rotation;
-
     // Reference to the sun.
     std::weak_ptr<Sun> sun;
 

@@ -25,7 +25,6 @@ using namespace std;
 
 glit::Planet::Planet(shared_ptr<Sun>& s)
   : terrain_(6371000.0) // m
-  , rotation(0.f)
   , sun(s)
 {}
 
@@ -53,18 +52,27 @@ glit::Planet::draw(const glit::Camera& camera)
     if (!sunp)
         throw runtime_error("no sun pointer in terrain draw");
 
-    auto model = rotate(mat4(1.f), rotation, vec3(0.0f, 1.0f, 0.0f));
-    auto modelviewproj = camera.transform() * model;
-
     auto playerp = player.lock();
     if (!playerp)
         throw runtime_error("no player pointer in terrain draw");
 
+    terrain_.draw(camera, sunp->sunDirection());
+    /*
     auto pos = playerp->viewPosition();
     auto dir = playerp->viewDirection();
+
+    auto modelviewproj = camera.transform();
+
+    const_cast<Camera&>(camera).warp(vec3(0.f, 0.f, 0.f),
+                       playerp->viewDirection(),
+                       playerp->viewUp());
 
     //auto mesh = terrain_.uploadAsWireframe(pos, camera.viewDirection());
     auto mesh = terrain_.uploadAsTriStrips(pos, camera.viewDirection());
     //auto mesh = terrain_.uploadAsTriStrips(vec3(0.f, 6300.f, 0.f), vec3(0.f, 0.f, 0.f));
-    mesh->draw(modelviewproj, camera.viewPosition(), sunp->sunDirection());
+    mesh->draw(modelviewproj,
+               vec3(pos),
+               sunp->sunDirection(),
+               float(terrain().radius()));
+    */
 }

@@ -37,6 +37,15 @@ glit::Drawable::Drawable(Drawable&& other)
   , count(other.count)
 {}
 
+glit::Drawable::Drawable(const Drawable& other)
+  : shader(other.shader)
+  , vb(other.vb)
+  , ib(other.ib)
+  , mode(other.mode)
+  , start(other.start)
+  , count(other.count)
+{}
+
 glit::Mesh::Mesh()
 {}
 

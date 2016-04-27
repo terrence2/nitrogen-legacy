@@ -77,7 +77,7 @@ class Player : public Entity
     void ufoStartRotateCW() { rotateReq[2] = -1.f; }
     void ufoStopRotateCW() { nullIfExpected(rotateReq[2], -1.f); }
 
-    constexpr static double MaxSpeed = 1000.0;
+    constexpr static double MaxSpeed = 10000.0;
     constexpr static double MinSpeed = 0.25;
     void ufoAccelerate() { if (speed < MaxSpeed) speed *= 2.f; }
     void ufoDecelerate() { if (speed > MinSpeed) speed /= 2.f; }
