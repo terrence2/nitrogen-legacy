@@ -11,6 +11,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+tupinit: .tup
+	tup init
+
 # This makefile includes various helper utilties. Please use
-glad:
+glad: deps/gladprefix
 	pushd deps/glad && python -m glad --out-path="../../deps/gladprefix/" --generator="c" --no-loader && popd
