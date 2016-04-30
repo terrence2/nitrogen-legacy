@@ -34,7 +34,6 @@ glit::Skybox::Skybox()
         indices.push_back(face.i1);
         indices.push_back(face.i2);
     }
-
     drawable.vertexBuffer()->upload(verts);
     drawable.indexBuffer()->upload(indices);
 }
@@ -67,7 +66,7 @@ glit::Skybox::makeSkyboxProgram()
             precision highp float;
 
             void main() {
-                gl_FragData[0] = vec4(1.f, 0.f, 1.f, 1.f);
+                gl_FragData[0] = vec4(1.0, 0.0, 1.0, 1.0);
             }
             ///////////////////////////////////////////////////////////////////
             )SHADER"
