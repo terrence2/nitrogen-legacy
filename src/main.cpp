@@ -97,7 +97,7 @@ struct WorldState
     glit::Camera camera;
 
     // MRT intermediate buffers.
-    glit::GBuffer buffer;
+    std::shared_ptr<glit::GBuffer> screenBuffer;
 
     // Things to draw.
     vector<shared_ptr<glit::Entity>> entities;
@@ -141,8 +141,11 @@ do_main()
     gWindow.init(debugBindings);
     gWindow.notifySizeChanged([](int w, int h){
         gWorld.camera.screenSizeChanged(w, h);
-        gWorld.buffer.screenSizeChanged(w, h);
+        if (gWorld.screenBuffer)
+            gWorld.screenBuffer->screenSizeChanged(w, h);
     });
+
+    gWorld.screenBuffer = make_shared<glit::GBuffer>(gWindow.width(), gWindow.height());
 
     auto poi = POI::create();
     auto sun = glit::Sun::create();
@@ -229,15 +232,12 @@ do_loop()
     static double lastFrameTime = 0.0;
     double now = glfwGetTime();
 
-    glClearColor(0, 0, 0, 255);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
     glEnable(GL_CULL_FACE);
     glFrontFace(GL_CW);
     glCullFace(GL_BACK);
 
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
+    //glEnable(GL_DEPTH_TEST);
+    //glDepthFunc(GL_LEQUAL);
 
     for (auto e : gWorld.entities)
         e->tick(now, now - lastFrameTime);
@@ -249,16 +249,11 @@ do_loop()
                        player->viewUp());
 
     {
-        glit::GBuffer::AutoBindBuffer abb(gWorld.buffer);
-        glit::GLCheckError();
-        for (auto e : gWorld.entities) {
+        glit::GBuffer::AutoBindBuffer abb(*gWorld.screenBuffer);
+        for (auto e : gWorld.entities)
             e->draw(gWorld.camera);
-            glit::GLCheckError();
-        }
     }
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glit::GLCheckError();
-    gWorld.buffer.deferredRender();
+    gWorld.screenBuffer->deferredRender();
 
     gWindow.swap();
     lastFrameTime = now;

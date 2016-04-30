@@ -21,6 +21,25 @@
 
 using namespace std;
 
+#ifdef GLAD_DEBUG
+static void gl_debug_nop(const char *name, void *funcptr, int len_args, ...) {}
+
+static void
+pre_gl_call(const char *name, void *funcptr, int len_args, ...)
+{
+    printf("Calling: %s (%d arguments)\n", name, len_args);
+}
+static void
+post_gl_call(const char *name, void *funcptr, int len_args, ...)
+{
+    glad_set_pre_callback(gl_debug_nop);
+    glad_set_post_callback(gl_debug_nop);
+    glit::GLCheckError();
+    glad_set_pre_callback(pre_gl_call);
+    glad_set_post_callback(post_gl_call);
+}
+#endif
+
 glit::Window::Window()
   : window(nullptr)
   , state(State::PreInit)
@@ -87,6 +106,12 @@ glit::Window::init(InputBindings& inputs)
     glfwMakeContextCurrent(window);
 #ifndef __EMSCRIPTEN__
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+
+# ifdef GLAD_DEBUG
+    // Print all GL calls so that we can pinpoint any errors.
+    glad_set_pre_callback(pre_gl_call);
+    glad_set_post_callback(post_gl_call);
+# endif // GLAD_DEBUG
 #else
     GLenum err = glewInit();
     if (err != GLEW_OK) {

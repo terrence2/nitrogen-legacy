@@ -165,6 +165,8 @@ class VertexBuffer : BufferBase
     void orphan() {
         if (vertexDesc_ != VertexDescriptor::fromType<VertexType>())
             throw std::runtime_error("orphaning with wrong vertex type");
+        if (numVerts_ == size_t(-1))
+            return;  // Already orphaned or never uploaded.
         glBindBuffer(GL_ARRAY_BUFFER, id);
         glBufferData(GL_ARRAY_BUFFER, numVerts_ * sizeof(VertexType),
                      nullptr, GL_STATIC_DRAW);

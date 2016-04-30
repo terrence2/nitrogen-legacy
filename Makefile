@@ -17,3 +17,6 @@ tupinit: .tup
 # This makefile includes various helper utilties. Please use
 glad: deps/gladprefix
 	pushd deps/glad && python -m glad --out-path="../../deps/gladprefix/" --generator="c" --no-loader && popd
+
+glad-debug: deps/gladprefix-debug
+	pushd deps/glad && python -m glad --out-path="../../deps/gladprefix-debug/" --generator="c-debug" --no-loader && popd

@@ -54,12 +54,15 @@ operator<< (std::ostream &stream, const glm::vec2 &v)
     D(GL_EXTENSIONS)
 
 namespace glit {
+class Texture;
+
 // Turn a C++ type into its matching GLenum.
 template <typename T> struct MapTypeToTraits{};
 template <const char* Name> struct MapNameToTraits{};
 #define MAKE_MAP(D) \
     D(float, GL_FLOAT, 1, 1) \
     D(uint8_t, GL_UNSIGNED_BYTE, 1, 1) \
+    D(Texture, 0x140F, 1, 1) \
     D(int, GL_INT, 1, 1) \
     D(GLuint, GL_UNSIGNED_INT, 1, 1) \
     D(glm::vec2, GL_FLOAT, 2, 1) \

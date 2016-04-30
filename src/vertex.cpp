@@ -149,14 +149,14 @@ void
 glit::IndexBuffer::orphan()
 {
     if (type_ == GLenum(-1))
-        return;
+        return;  // Already orphaned or never uploaded.
 
-    size_t size = 1;
-    if (type_ == GL_UNSIGNED_SHORT)
-        size = sizeof(uint16_t);
-    else if (type_ == GL_UNSIGNED_INT)
-        size = sizeof(uint32_t);
-
+    size_t size = -1;  // Ensure we generate GL_INVALID_VALUE if not set.
+    switch (type_) {
+    case GL_UNSIGNED_BYTE: size = sizeof(uint8_t); break;
+    case GL_UNSIGNED_SHORT: size = sizeof(uint16_t); break;
+    case GL_UNSIGNED_INT: size = sizeof(uint32_t); break;
+    }
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, id);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices_ * size,
                  nullptr, GL_STATIC_DRAW);

@@ -20,6 +20,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "glwrapper.h"
+#include "texture.h"
 #include "vertex.h"
 
 namespace glit {
@@ -120,7 +121,6 @@ class Program
                          inputs[N].name() << std::endl;
         } else {
             bindUniform(index, fst);
-            GLCheckError();
         }
         bindUniforms<N + 1>(args...);
     }
@@ -133,6 +133,12 @@ class Program
     }
     void bindUniform(GLint index, const glm::mat4& m) const {
         glUniformMatrix4fv(index, 1, GL_FALSE, glm::value_ptr(m));
+    }
+    void bindUniform(GLint index, const Texture& texture) const {
+        size_t tuNum = textureOffset++;
+        glActiveTexture(GL_TEXTURE0 + tuNum);
+        glBindTexture(GL_TEXTURE_2D, texture.id());
+        glUniform1i(index, tuNum);
     }
 
     class AutoEnableAttributes
@@ -155,6 +161,7 @@ class Program
     FragmentShader fragmentShader;
     GLuint id;
     std::vector<UniformDesc> inputs;
+    mutable size_t textureOffset;
 
     Program(const Program&) = delete;
 };

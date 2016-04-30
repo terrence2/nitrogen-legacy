@@ -43,13 +43,14 @@ class Window
     std::vector<SizeChangedCallback> windowSizeChangedCallbacks;
 
     // Cached hardware state.
-    static const int DefaultWidth = 1280;
-    static const int DefaultHeight = 720;
     int width_;
     int height_;
     double lastMouse_[2];
 
   public:
+    static const int DefaultWidth = 1280;
+    static const int DefaultHeight = 720;
+
     Window();
     ~Window();
     void init(InputBindings& inputs);

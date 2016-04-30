@@ -181,6 +181,7 @@ glit::Program::Program(Program&& other)
   , fragmentShader(forward<FragmentShader>(other.fragmentShader))
   , id(other.id)
   , inputs(other.inputs)
+  , textureOffset(0)
 {
     other.id = 0;
 }
@@ -200,9 +201,12 @@ glit::Program::use() const
 {
     if (!id)
         throw runtime_error("attempt to run a moved or deleted program");
-    GLClearError();
     glUseProgram(id);
-    GLCheckError();
+
+    // Reset the texture unit index each time we use. The following
+    // bindUniforms bump the textureOffset each time it gets used to
+    // acquire a new TU.
+    textureOffset = 0;
 }
 
 glit::Program::AutoEnableAttributes::AutoEnableAttributes(

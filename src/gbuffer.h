@@ -12,28 +12,44 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
+#include <glm/glm.hpp>
+
 #include "glwrapper.h"
+#include "mesh.h"
+#include "shader.h"
+#include "texture.h"
+#include "vertex.h"
 
 namespace glit {
 
 // Manager multiple render targets.
 class GBuffer
 {
-    GBuffer(GBuffer&&) = delete;
-    GBuffer(const GBuffer&) = delete;
-
     GLuint frameBuffer;
-    GLuint renderTargets[3];
-    GLuint colorBuffer() const { return renderTargets[0]; }
-    GLuint depthBuffer() const { return renderTargets[1]; }
-    GLuint stencilBuffer() const { return renderTargets[2]; }
+    std::shared_ptr<Texture> renderTargets[1];
 
-    void cleanup();
+    std::shared_ptr<Texture> colorBuffer() const { return renderTargets[0]; }
+    //GLuint depthBuffer() const { return renderTargets[1]; }
+    //GLuint stencilBuffer() const { return renderTargets[2]; }
+
+    struct Vertex {
+        glm::vec3 aPosition;
+        glm::vec2 aTexCoord;
+
+        static void describe(std::vector<VertexAttrib>& attribs) {
+            attribs.push_back(MakeGLMVertexAttrib(Vertex, aPosition, false));
+            attribs.push_back(MakeGLMVertexAttrib(Vertex, aTexCoord, false));
+        }
+    };
+
+    static std::shared_ptr<glit::Program> makeDeferredRenderProgram();
+    glit::Drawable screenRenderer;
+
     void bind() const;
     void unbind() const;
 
   public:
-    GBuffer();
+    GBuffer(int width, int height);
     ~GBuffer();
 
     void screenSizeChanged(int width, int height);
@@ -42,7 +58,12 @@ class GBuffer
         AutoBindBuffer(const GBuffer& gbuf);
         ~AutoBindBuffer();
     };
+
     void deferredRender();
+
+  private:
+    GBuffer(GBuffer&&) = delete;
+    GBuffer(const GBuffer&) = delete;
 };
 
 } // namespace glit
