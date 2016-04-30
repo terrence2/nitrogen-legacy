@@ -37,6 +37,7 @@
 #include "icosphere.h"
 #include "planet.h"
 #include "player.h"
+#include "skybox.h"
 #include "shader.h"
 #include "sun.h"
 #include "terrain.h"
@@ -149,6 +150,7 @@ do_main()
 
     auto poi = POI::create();
     auto sun = glit::Sun::create();
+    auto skybox = make_shared<glit::Skybox>();
     auto planet = make_shared<glit::Planet>(sun);
 
     auto player = make_shared<glit::Player>(planet);
@@ -210,6 +212,7 @@ do_main()
 
     // Note: order is important here.
     gWorld.entities.push_back(player);
+    gWorld.entities.push_back(skybox);
     gWorld.entities.push_back(sun);
     gWorld.entities.push_back(planet);
     gWorld.entities.push_back(poi);

@@ -21,13 +21,18 @@
 
 using namespace std;
 
+// Uncomment to monitor GL.
+//#define LOG_GL_CALLS
+
 #ifdef GLAD_DEBUG
 static void gl_debug_nop(const char *name, void *funcptr, int len_args, ...) {}
 
 static void
 pre_gl_call(const char *name, void *funcptr, int len_args, ...)
 {
+#ifdef LOG_GL_CALLS
     printf("Calling: %s (%d arguments)\n", name, len_args);
+#endif
 }
 static void
 post_gl_call(const char *name, void *funcptr, int len_args, ...)
