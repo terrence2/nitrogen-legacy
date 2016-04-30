@@ -22,13 +22,19 @@
 using namespace std;
 
 glit::Window::Window()
-  : state(State::PreInit)
+  : window(nullptr)
+  , state(State::PreInit)
   , bindings(nullptr)
+  , width_(DefaultWidth)
+  , height_(DefaultHeight)
 {}
 
 void
-glit::Window::init()
+glit::Window::init(InputBindings& inputs)
 {
+    // Ensure that bindings are set before we can start delivering events.
+    bindings = &inputs;
+
     if (state != State::PreInit)
         throw runtime_error("Window already inited");
 
@@ -45,8 +51,6 @@ glit::Window::init()
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
 
     // Use "windowed fullscreen" by getting the current settings.
-    int width = 1280;
-    int height = 720;
     GLFWmonitor* monitor = nullptr;
 #ifndef __EMSCRIPTEN__
     monitor = glfwGetPrimaryMonitor();
@@ -55,10 +59,10 @@ glit::Window::init()
     glfwWindowHint(GLFW_RED_BITS, mode->redBits);
     glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
     glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
-    width = mode->width;
-    height = mode->height;
+    width_ = mode->width;
+    height_ = mode->height;
 #endif
-    window = glfwCreateWindow(width, height, "fsim", monitor, NULL);
+    window = glfwCreateWindow(width_, height_, "fsim", monitor, NULL);
     if (!window)
         throw runtime_error("glfwCreateWindow failed");
 
@@ -77,11 +81,19 @@ glit::Window::init()
 
     // Query the initial cursor position so that dx/dy are sane
     // on our first update.
-    glfwGetCursorPos(window, &lastMouse[0], &lastMouse[1]);
+    glfwGetCursorPos(window, &lastMouse_[0], &lastMouse_[1]);
 
     // Do late binding of GL primitives.
     glfwMakeContextCurrent(window);
+#ifndef __EMSCRIPTEN__
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+#else
+    GLenum err = glewInit();
+    if (err != GLEW_OK) {
+        throw runtime_error("GLEW init failed: " +
+                            string((const char*)glewGetErrorString(err)));
+    }
+#endif
 
 #define PRINT_GL_STRING(key) \
     cout << #key << ": " << glGetString(key) << endl;
@@ -134,10 +146,10 @@ glit::Window::cursorPositionCallback(GLFWwindow* window,
     Window* self = fromGLFW(window);
     self->bindings->dispatchMouseMotion(xpos,
                                         ypos,
-                                        self->lastMouse[0] - xpos,
-                                        self->lastMouse[1] - ypos);
-    self->lastMouse[0] = xpos;
-    self->lastMouse[1] = ypos;
+                                        self->lastMouse_[0] - xpos,
+                                        self->lastMouse_[1] - ypos);
+    self->lastMouse_[0] = xpos;
+    self->lastMouse_[1] = ypos;
 }
 
 /* static */ void
@@ -155,6 +167,13 @@ glit::Window::windowCloseCallback(GLFWwindow* window)
     self->state = State::Done;
 }
 
+void
+glit::Window::notifySizeChanged(SizeChangedCallback cb)
+{
+    windowSizeChangedCallbacks.push_back(cb);
+    cb(width(), height());
+}
+
 /* static */ void
 glit::Window::windowSizeCallback(GLFWwindow* window, int width, int height)
 {
@@ -163,4 +182,7 @@ glit::Window::windowSizeCallback(GLFWwindow* window, int width, int height)
     self->width_ = width;
     self->height_ = height;
     glViewport(0, 0, width, height);
+
+    for (auto& cb : self->windowSizeChangedCallbacks)
+        cb(width, height);
 }

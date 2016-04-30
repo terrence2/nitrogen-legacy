@@ -12,8 +12,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
+#include "glwrapper.h"
 
 #include <string>
 

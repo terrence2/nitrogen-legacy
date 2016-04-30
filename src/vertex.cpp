@@ -148,7 +148,7 @@ glit::IndexBuffer::unbind()
 void
 glit::IndexBuffer::orphan()
 {
-    if (type_ == -1)
+    if (type_ == GLenum(-1))
         return;
 
     size_t size = 1;

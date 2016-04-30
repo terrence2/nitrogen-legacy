@@ -17,10 +17,8 @@
 #include <type_traits>
 
 #include <math.h>
+#include <signal.h>
 #include <stdio.h>
-
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
 
 #ifdef __EMSCRIPTEN__
 #  include <emscripten.h>
@@ -30,9 +28,12 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat4x4.hpp>
 
+#include "backtrace.h"
 #include "bindings.h"
 #include "camera.h"
 #include "entity.h"
+#include "gbuffer.h"
+#include "glwrapper.h"
 #include "icosphere.h"
 #include "planet.h"
 #include "player.h"
@@ -95,6 +96,9 @@ struct WorldState
     // The camera state.
     glit::Camera camera;
 
+    // MRT intermediate buffers.
+    glit::GBuffer buffer;
+
     // Things to draw.
     vector<shared_ptr<glit::Entity>> entities;
 };
@@ -114,6 +118,9 @@ int main()
         cerr << "Runtime error: " << sre.what() << endl;
     }
 #else
+    signal(SIGSEGV, showBacktrace);
+    signal(SIGABRT, showBacktrace);
+
     // Otherwise, let the platform catch it.
     do_main();
 #endif // __EMSCRIPTEN__
@@ -131,13 +138,11 @@ do_main()
     glit::InputBindings debugBindings(dispatcher, "DebugBindings");
     debugBindings.bindNamedKey("quit", GLFW_KEY_ESCAPE);
 
-    //glit::SceneGraph scene;
-
-    gWindow.init();
-    gWindow.setCurrentBindings(debugBindings);
-    //gWindow.setSceneGraph(scene);
-    gWorld.camera.screenSizeChanged(gWindow.width(), gWindow.height());
-    //gWorld.camera.warp(vec3(0.f, 0.f, 637.1002f * 5), vec3(0.f, 0.f, -1.f));
+    gWindow.init(debugBindings);
+    gWindow.notifySizeChanged([](int w, int h){
+        gWorld.camera.screenSizeChanged(w, h);
+        gWorld.buffer.screenSizeChanged(w, h);
+    });
 
     auto poi = POI::create();
     auto sun = glit::Sun::create();
@@ -210,7 +215,7 @@ do_main()
     while (!gWindow.isDone())
         do_loop();
 #else
-    emscripten_set_main_loop(do_loop, 60, 1);
+    emscripten_set_main_loop(do_loop, 0, 1);
 #endif
 
     return 0;
@@ -239,22 +244,21 @@ do_loop()
 
     // Slave the camera to the player.
     glit::Player* player = dynamic_cast<glit::Player*>(gWorld.entities[0].get());
-    /*
-    gWorld.camera.warp(vec3(0.f, 0.f, 0.f),
-                       player->viewDirection(),
-                       player->viewUp());
-    */
     gWorld.camera.warp(player->viewPosition(),
                        player->viewDirection(),
                        player->viewUp());
-    /*
-    gWorld.camera.warp(vec3(0.f, 20000.f, 0.f),
-                       vec3(0.f, -1.f, 0.f),
-                       vec3(0.f, 0.f, -1.f));
-    */
 
-    for (auto e : gWorld.entities)
-        e->draw(gWorld.camera);
+    {
+        glit::GBuffer::AutoBindBuffer abb(gWorld.buffer);
+        glit::GLCheckError();
+        for (auto e : gWorld.entities) {
+            e->draw(gWorld.camera);
+            glit::GLCheckError();
+        }
+    }
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glit::GLCheckError();
+    gWorld.buffer.deferredRender();
 
     gWindow.swap();
     lastFrameTime = now;

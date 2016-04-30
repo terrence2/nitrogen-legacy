@@ -17,9 +17,6 @@
 #include <stdexcept>
 #include <string>
 
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-
 #include "shader_includes.h"
 #include "utility.h"
 
@@ -203,7 +200,9 @@ glit::Program::use() const
 {
     if (!id)
         throw runtime_error("attempt to run a moved or deleted program");
+    GLClearError();
     glUseProgram(id);
+    GLCheckError();
 }
 
 glit::Program::AutoEnableAttributes::AutoEnableAttributes(

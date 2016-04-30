@@ -17,7 +17,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include <glad/glad.h>
+#include "glwrapper.h"
 #include <GLFW/glfw3.h>
 
 #include <glm/mat4x4.hpp>
@@ -225,6 +225,15 @@ class IndexBuffer : BufferBase
         return buf;
     }
 
+    void upload(const std::vector<uint8_t>& indices) {
+        type_ = GL_UNSIGNED_BYTE;
+        numIndices_ = indices.size();
+        bind();
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices_ * sizeof(uint8_t),
+                     &indices[0], GL_STATIC_DRAW);
+        //std::cout << "uploaded " << numIndices_ << " indices (" <<
+        //             (2 * numIndices_)<< " bytes)" << std::endl;
+    }
     void upload(const std::vector<uint16_t>& indices) {
         type_ = GL_UNSIGNED_SHORT;
         numIndices_ = indices.size();

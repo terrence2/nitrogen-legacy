@@ -14,31 +14,45 @@
 
 #include <unordered_map>
 
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-
 #include "bindings.h"
+#include "glwrapper.h"
 #include "utility.h"
 
 namespace glit {
 
+// This class wraps GLFW into a more C++ friendly interface. Currently
+// it assumes that only a single window is used.
 class Window
 {
+    // The underlying window that we are wrapping.
+    GLFWwindow* window;
+
+    // Main application state.
     enum class State {
         PreInit = 0,
         Inited = 1,
         Done = 2
     } state;
+
+    // The bindings dispatch input events to handlers.
     InputBindings* bindings;
-    GLFWwindow* window;
+
+    // Some sorts of hardware events do not map well as "inputs". In these
+    // cases we provide a simple callback system.
+    using SizeChangedCallback = std::function<void(int, int)>;
+    std::vector<SizeChangedCallback> windowSizeChangedCallbacks;
+
+    // Cached hardware state.
+    static const int DefaultWidth = 1280;
+    static const int DefaultHeight = 720;
     int width_;
     int height_;
-    double lastMouse[2];
+    double lastMouse_[2];
 
   public:
     Window();
     ~Window();
-    void init();
+    void init(InputBindings& inputs);
 
     int width() const { return width_; }
     int height() const { return height_; }
@@ -47,6 +61,8 @@ class Window
     bool isDone() const { return state == State::Done; }
 
     void setCurrentBindings(InputBindings& inputs) { bindings = &inputs; }
+    void notifySizeChanged(SizeChangedCallback cb);
+
     void swap();
 
   private:

@@ -24,7 +24,7 @@
 
 #include <glm/glm.hpp>
 
-#include <glad/glad.h>
+#include "glwrapper.h"
 #include <GLFW/glfw3.h>
 
 inline std::ostream&
@@ -60,6 +60,8 @@ template <const char* Name> struct MapNameToTraits{};
 #define MAKE_MAP(D) \
     D(float, GL_FLOAT, 1, 1) \
     D(uint8_t, GL_UNSIGNED_BYTE, 1, 1) \
+    D(int, GL_INT, 1, 1) \
+    D(GLuint, GL_UNSIGNED_INT, 1, 1) \
     D(glm::vec2, GL_FLOAT, 2, 1) \
     D(glm::vec3, GL_FLOAT, 3, 1) \
     D(glm::mat4, GL_FLOAT, 4, 4)
@@ -74,6 +76,49 @@ template <const char* Name> struct MapNameToTraits{};
 MAKE_MAP(EXPAND_MAP_ITEM)
 #undef EXPAND_MAP_ITEM
 #undef MAKE_MAP
+
+inline std::string
+FrameBufferErrorToString(GLenum status)
+{
+    switch(status) {
+    case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT: return "IncompleteAttachment";
+    //case GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS: return "IncompleteDimensions";
+    case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT: return "MissingAttachement";
+    case GL_FRAMEBUFFER_UNSUPPORTED: return "Unsupported";
+    default: return "unknown status code";
+    }
+}
+
+inline std::string
+GLErrorToString(GLenum error)
+{
+    switch(error) {
+    case GL_NO_ERROR: return "(no error)";
+    case GL_INVALID_ENUM: return "InvalidEnum";
+    case GL_INVALID_VALUE: return "InvalidValue";
+    case GL_INVALID_OPERATION: return "InvalidOperation";
+    case GL_INVALID_FRAMEBUFFER_OPERATION: return "InvalidFrameBufferOperation";
+    case GL_OUT_OF_MEMORY: return "OutOfMemory";
+    case GL_STACK_UNDERFLOW: return "StackUnderflow";
+    case GL_STACK_OVERFLOW: return "StackOverflow";
+    default: return "unknown error";
+    }
+}
+
+inline void
+GLCheckError()
+{
+    GLenum status = glGetError();
+    if (status != GL_NO_ERROR)
+        throw std::runtime_error("GL error reported: " + GLErrorToString(status));
+}
+
+inline void
+GLClearError()
+{
+    while (glGetError() != GL_NO_ERROR)
+        ;
+}
 
 namespace util {
 
