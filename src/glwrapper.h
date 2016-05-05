@@ -15,6 +15,10 @@
 #ifndef __EMSCRIPTEN__
 # include <glad/glad.h>
 #else
+// Glad probes for each function at runtime. Under emscripten, this generates
+// an exception for each method that is not present in webgl, resulting in a
+// massive hang at startup. On that platform we instead use glew + glfw to
+// import the right GL bits and play games to make the names line up with glad.
 # include <GL/glew.h>
 # define glad_glGenFramebuffers glGenFramebuffers
 # define glad_glBindFramebuffer glBindFramebuffer

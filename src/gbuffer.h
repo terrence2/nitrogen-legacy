@@ -26,10 +26,10 @@ namespace glit {
 class GBuffer
 {
     GLuint frameBuffer;
-    std::shared_ptr<Texture> renderTargets[1];
+    std::shared_ptr<Texture> renderTargets[2];
 
     std::shared_ptr<Texture> colorBuffer() const { return renderTargets[0]; }
-    //GLuint depthBuffer() const { return renderTargets[1]; }
+    std::shared_ptr<Texture> depthBuffer() const { return renderTargets[1]; }
     //GLuint stencilBuffer() const { return renderTargets[2]; }
 
     struct Vertex {

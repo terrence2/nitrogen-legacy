@@ -28,7 +28,7 @@ glit::Texture::~Texture()
 }
 
 /* static */ shared_ptr<glit::Texture>
-glit::Texture::makeForScreen(int width, int height)
+glit::Texture::makeFramebufferColorBuffer(int width, int height)
 {
     auto t = make_shared<Texture>();
     glBindTexture(GL_TEXTURE_2D, t->id());
@@ -38,6 +38,21 @@ glit::Texture::makeForScreen(int width, int height)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
                  GL_UNSIGNED_BYTE, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return t;
+}
+
+/* static */ shared_ptr<glit::Texture>
+glit::Texture::makeFramebufferDepthBuffer(int width, int height)
+{
+    auto t = make_shared<Texture>();
+    glBindTexture(GL_TEXTURE_2D, t->id());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, width, height, 0,
+                 GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
     return t;
 }

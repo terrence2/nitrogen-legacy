@@ -177,6 +177,7 @@ glit::Terrain::makeWaterProgram()
             R"SHADER(
             ///////////////////////////////////////////////////////////////////
             #version 100
+            #extension GL_EXT_draw_buffers : require
             precision highp float;
             uniform mat4 uModelViewProj;
             uniform vec3 uCameraPosition;
@@ -202,6 +203,7 @@ glit::Terrain::makeWaterProgram()
             R"SHADER(
             ///////////////////////////////////////////////////////////////////
             #version 100
+            #extension GL_EXT_draw_buffers : require
             precision highp float;
             const float PI = 3.1415925;
             uniform vec3 uSunDirection;

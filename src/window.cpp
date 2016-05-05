@@ -129,7 +129,13 @@ glit::Window::init(InputBindings& inputs)
     cout << #key << ": " << glGetString(key) << endl;
 FOR_EACH_GL_STRINGS(PRINT_GL_STRING)
 #undef PRINT_GL_STRING
-    // we need GL_OES_element_index_uint
+
+    // Check for and error out early if we are missing required functionality.
+    string extensions = string(reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS)));
+    if (extensions.find("depth_texture") == string::npos)
+        throw runtime_error("missing required extension: depth_texture");
+    if (extensions.find("element_index_uint") == string::npos)
+        throw runtime_error("missing required extension: element_index_uint");
 }
 
 glit::Window::~Window()

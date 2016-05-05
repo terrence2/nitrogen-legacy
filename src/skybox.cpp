@@ -12,6 +12,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "skybox.h"
 
+#include "camera.h"
 #include "icosphere.h"
 
 using namespace std;
@@ -28,7 +29,7 @@ glit::Skybox::Skybox()
     vector<Vertex> verts;
     vector<uint16_t> indices;
     for (auto& v : sphere.vertices())
-        verts.push_back(Vertex{v.aPosition});
+        verts.push_back(Vertex{v.aPosition * Camera::FarDistance});
     for (auto& face : sphere.faceList()) {
         indices.push_back(face.i0);
         indices.push_back(face.i1);
@@ -47,6 +48,7 @@ glit::Skybox::makeSkyboxProgram()
             R"SHADER(
             ///////////////////////////////////////////////////////////////////
             #version 100
+            #extension GL_EXT_draw_buffers : require
             precision highp float;
             attribute vec3 aPosition;
             uniform mat4 uModelViewProj;
@@ -62,6 +64,7 @@ glit::Skybox::makeSkyboxProgram()
             R"SHADER(
             ///////////////////////////////////////////////////////////////////
             #version 100
+            #extension GL_EXT_draw_buffers : require
             //#include <noise3D.glsl>
             precision highp float;
 

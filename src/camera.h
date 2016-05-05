@@ -30,15 +30,15 @@ class Camera
     glm::vec3 direction;
     glm::vec3 up;
 
+    Camera(Camera&&) = delete;
+
+  public:
     // Although we routinely draw objects that are millions of km away, we take
     // care to scale the verticies in these cases, allowing us to get away with
     // a much shorter far plane to avoid z-tearing close by.
     constexpr static float NearDistance = 0.1f;
     constexpr static float FarDistance = 1000.f;
 
-    Camera(Camera&&) = delete;
-
-  public:
     Camera();
     Camera(const Camera&);
 

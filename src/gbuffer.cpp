@@ -97,19 +97,24 @@ glit::GBuffer::makeDeferredRenderProgram()
 void
 glit::GBuffer::deferredRender()
 {
+    glDisable(GL_DEPTH_TEST);
     screenRenderer.draw(*colorBuffer());
+    glEnable(GL_DEPTH_TEST);
 }
 
 void
 glit::GBuffer::screenSizeChanged(int width, int height)
 {
     // (Re)Create the target texture buffers.
-    renderTargets[0] = Texture::makeForScreen(width, height);
+    renderTargets[0] = Texture::makeFramebufferColorBuffer(width, height);
+    renderTargets[1] = Texture::makeFramebufferDepthBuffer(width, height);
 
     // Update the frame buffer to target the new textures.
     glad_glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
     glad_glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                                 GL_TEXTURE_2D, colorBuffer()->id(), 0);
+    glad_glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                                GL_TEXTURE_2D, depthBuffer()->id(), 0);
     GLenum status = glad_glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE) {
         throw runtime_error("Failed to create frame buffer: " +

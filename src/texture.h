@@ -26,7 +26,8 @@ class Texture
     Texture();
     ~Texture();
 
-    static std::shared_ptr<Texture> makeForScreen(int width, int height);
+    static std::shared_ptr<Texture> makeFramebufferColorBuffer(int width, int height);
+    static std::shared_ptr<Texture> makeFramebufferDepthBuffer(int width, int height);
 
     GLuint id() const { return textureId_; }
 

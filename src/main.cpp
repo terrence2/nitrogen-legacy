@@ -37,8 +37,8 @@
 #include "icosphere.h"
 #include "planet.h"
 #include "player.h"
-#include "skybox.h"
 #include "shader.h"
+#include "skybox.h"
 #include "sun.h"
 #include "terrain.h"
 #include "vertex.h"
@@ -217,6 +217,12 @@ do_main()
     gWorld.entities.push_back(planet);
     gWorld.entities.push_back(poi);
 
+    glEnable(GL_CULL_FACE);
+    glFrontFace(GL_CW);
+    glCullFace(GL_BACK);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+
 #ifndef __EMSCRIPTEN__
     while (!gWindow.isDone())
         do_loop();
@@ -230,17 +236,11 @@ do_main()
 void
 do_loop()
 {
-    glit::util::Timer t("frame");
+    //glit::util::Timer t("frame");
 
     static double lastFrameTime = 0.0;
     double now = glfwGetTime();
 
-    glEnable(GL_CULL_FACE);
-    glFrontFace(GL_CW);
-    glCullFace(GL_BACK);
-
-    //glEnable(GL_DEPTH_TEST);
-    //glDepthFunc(GL_LEQUAL);
 
     for (auto e : gWorld.entities)
         e->tick(now, now - lastFrameTime);
@@ -253,6 +253,7 @@ do_loop()
 
     {
         glit::GBuffer::AutoBindBuffer abb(*gWorld.screenBuffer);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         for (auto e : gWorld.entities)
             e->draw(gWorld.camera);
     }
