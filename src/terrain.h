@@ -37,8 +37,8 @@ class Terrain
     ~Terrain();
     void draw(const Camera& camera, glm::vec3 sunDirection);
 
-    double heightAt(glm::dvec3 pos) const;
-    double radius() const { return radius_; }
+    float heightAt(glm::vec3 pos) const;
+    float radius() const { return radius_; }
 
   private:
     std::shared_ptr<Program> programLand;
@@ -52,7 +52,7 @@ class Terrain
                             const glm::dvec3& viewDirection);
     Mesh* uploadAsTriStrips(const glm::dvec3& viewPosition,
                             const glm::dvec3& viewDirection);
-    double radius_;
+    float radius_;
 
     // A facet is the subdividable piece of the terrain.
     //
@@ -90,7 +90,7 @@ class Terrain
         // truncating to floats so that near verticies are all small and have
         // comparatively high precision.
         struct CPUVertex {
-            glm::dvec3 position;
+            glm::vec3 position;
             glm::vec3 normal;
         };
         struct GPUVertex {
@@ -149,12 +149,11 @@ class Terrain
     // because we have already displaced the verticies to have the camera as
     // the origin, so the scaling should fit in the low digits of a float, as
     // long as its not too extreme.
-    //constexpr static double CameraScale = 1.0 / 100.0;
-    constexpr static double CameraScale = 10000.0;
+    constexpr static float CameraScale = 10000.f;
 
-    static glm::dvec3 bisect(glm::dvec3 v0, glm::dvec3 v1);
-    void subdivideFacet(glm::dvec3 p0, glm::dvec3 p1, glm::dvec3 p2,
-                        glm::dvec3* c0, glm::dvec3* c1, glm::dvec3* c2) const;
+    static glm::vec3 bisect(glm::vec3 v0, glm::vec3 v1);
+    void subdivideFacet(glm::vec3 p0, glm::vec3 p1, glm::vec3 p2,
+                        glm::vec3* c0, glm::vec3* c1, glm::vec3* c2) const;
     void reshape(const glm::dvec3& viewPosition,
                  const glm::dvec3& viewDirection);
     void reshapeN(size_t level, Facet& self,

@@ -69,6 +69,8 @@ glit::BaseShader<Type>::loadIncludeFile(const string& line, vector<string>& outp
     string filename(glit::util::trim(noinclude, " <>\"\t"));
     if (filename == string("noise2D.glsl")) {
         output.push_back(glit::include_noise2D_glsl);
+    } else if (filename == string("noise3D.glsl")) {
+        output.push_back(glit::include_noise3D_glsl);
     } else {
         throw runtime_error(string("unknown include file: ") + filename);
     }

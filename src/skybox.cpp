@@ -52,9 +52,11 @@ glit::Skybox::makeSkyboxProgram()
             precision highp float;
             attribute vec3 aPosition;
             uniform mat4 uModelViewProj;
+            varying vec3 vPosition;
 
             void main()
             {
+                vPosition = aPosition;
                 gl_Position = uModelViewProj * vec4(aPosition, 1.0);
             }
             ///////////////////////////////////////////////////////////////////
@@ -65,11 +67,28 @@ glit::Skybox::makeSkyboxProgram()
             ///////////////////////////////////////////////////////////////////
             #version 100
             #extension GL_EXT_draw_buffers : require
-            //#include <noise3D.glsl>
             precision highp float;
+            #include <noise3D.glsl>
+            varying vec3 vPosition;
+
+            float fbm(vec3 pos) {
+               // sum(i=0..n, w**i * noise(s**i * xyz))
+               float acc = 0.0;
+               const float AmplitudeDelta = 0.5;
+               const float ScaleDelta = 2.0;
+               float a = AmplitudeDelta;
+               float s = ScaleDelta;
+               for (int i = 0; i < 4; ++i) {
+                   acc += a * snoise(s * pos);
+                   a *= AmplitudeDelta;
+                   s *= ScaleDelta;
+               }
+               return acc;
+            }
 
             void main() {
-                gl_FragData[0] = vec4(1.0, 0.0, 1.0, 1.0);
+                float intensity = fbm(vPosition / 1000.0);
+                gl_FragData[0] = vec4(intensity, intensity, intensity, 1.0);
             }
             ///////////////////////////////////////////////////////////////////
             )SHADER"

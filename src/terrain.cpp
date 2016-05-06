@@ -24,15 +24,15 @@
 using namespace glm;
 using namespace std;
 
-/* static */ dvec3
-glit::Terrain::bisect(dvec3 v0, dvec3 v1)
+/* static */ vec3
+glit::Terrain::bisect(vec3 v0, vec3 v1)
 {
-    return v0 + ((v1 - v0) / 2.0);
+    return v0 + ((v1 - v0) / 2.f);
 }
 
 void
-glit::Terrain::subdivideFacet(dvec3 p0, dvec3 p1, dvec3 p2,
-                              dvec3* c0, dvec3* c1, dvec3* c2) const
+glit::Terrain::subdivideFacet(vec3 p0, vec3 p1, vec3 p2,
+                              vec3* c0, vec3* c1, vec3* c2) const
 {
     *c0 = normalize(bisect(p1, p2));
     *c1 = normalize(bisect(p0, p2));
@@ -46,9 +46,13 @@ glit::Terrain::subdivideFacet(dvec3 p0, dvec3 p1, dvec3 p2,
 glit::Terrain::Terrain(double r)
   : programLand(makeLandProgram())
   , programWater(makeWaterProgram())
-  , wireframeMesh(Drawable(programLand, GL_LINES,
+  , wireframeMesh(std::vector<Drawable>{
+       Drawable(programLand, GL_LINES,
            make_shared<VertexBuffer>(VertexDescriptor::fromType<Facet::GPUVertex>()),
-           make_shared<IndexBuffer>()))
+           make_shared<IndexBuffer>()),
+       Drawable(programWater, GL_LINES,
+           make_shared<VertexBuffer>(VertexDescriptor::fromType<IcoSphere::Vertex>()),
+           make_shared<IndexBuffer>())})
   , tristripMesh(std::vector<Drawable>{
        Drawable(programLand, GL_TRIANGLE_STRIP,
            make_shared<VertexBuffer>(VertexDescriptor::fromType<Facet::GPUVertex>()),
@@ -64,7 +68,7 @@ glit::Terrain::Terrain(double r)
     size_t i = 0;
     for (auto& v : sphere.vertices()) {
         baseVerts.push_back(Facet::VertexAndIndex{
-                {dvec3(v.aPosition) * heightAt(dvec3(v.aPosition))},
+                {v.aPosition * heightAt(v.aPosition)},
                 uint32_t(-1)});
         ++i;
     }
@@ -77,6 +81,7 @@ glit::Terrain::Terrain(double r)
     // Copy verts from an icosphere for our water.
     IcoSphere water(4);
     tristripMesh.drawable(1).vertexBuffer()->upload(water.vertices());
+    wireframeMesh.drawable(1).vertexBuffer()->upload(water.vertices());
     vector<uint16_t> indices;
     for (auto& face : water.faceList()) {
         indices.push_back(face.i0);
@@ -84,6 +89,7 @@ glit::Terrain::Terrain(double r)
         indices.push_back(face.i1);
     }
     tristripMesh.drawable(1).indexBuffer()->upload(indices);
+    wireframeMesh.drawable(1).indexBuffer()->upload(indices);
 
     // We want a falloff so that we get more subdivisions near the camera and
     // they fall away in the distance. Ideally, we'd like the falloff to be
@@ -124,8 +130,8 @@ glit::Terrain::makeLandProgram()
             precision highp float;
 
             uniform mat4 uModelViewProj;
-            uniform vec3 uCameraPosition;
-            uniform float uRadius;
+            //uniform vec3 uCameraPosition;
+            //uniform float uRadius;
 
             attribute vec3 aPosition;
             attribute vec3 aNormal;
@@ -163,9 +169,9 @@ glit::Terrain::makeLandProgram()
         );
     return make_shared<Program>(move(vs), move(fs), vector<UniformDesc>{
                 Program::MakeInput<mat4>("uModelViewProj"),
-                Program::MakeInput<mat4>("uCameraPosition"),
+                //Program::MakeInput<mat4>("uCameraPosition"),
                 Program::MakeInput<vec3>("uSunDirection"),
-                Program::MakeInput<float>("uRadius"),
+                //Program::MakeInput<float>("uRadius"),
             });
 }
 
@@ -228,7 +234,8 @@ glit::Terrain::makeWaterProgram()
 void
 glit::Terrain::draw(const Camera& camera, glm::vec3 sunDirection)
 {
-    auto mesh = uploadAsTriStrips(camera.viewPosition(), camera.viewDirection());
+    //auto mesh = uploadAsTriStrips(camera.viewPosition(), camera.viewDirection());
+    auto mesh = uploadAsWireframe(camera.viewPosition(), camera.viewDirection());
 
     // We upload vertices relative to the camera position. This allows us to
     // "pre-transform" the verticies using double precision, allowing us to
@@ -237,19 +244,15 @@ glit::Terrain::draw(const Camera& camera, glm::vec3 sunDirection)
     Camera cam(camera);
     cam.move(vec3(0.f, 0.f, 0.f));
 
-    mesh->draw(cam.transform(), camera.viewPosition(),
-               sunDirection, float(radius_));
+    mesh->drawable(0).draw(cam.transform(), sunDirection);
+    mesh->drawable(1).draw(cam.transform(), camera.viewPosition(),
+                           sunDirection, float(radius_));
 }
 
-double
-glit::Terrain::heightAt(dvec3 dpos) const
+float
+glit::Terrain::heightAt(vec3 dpos) const
 {
-    //const static float freq = 2000.0f;
-    double h = radius_ + 20000.0 * double(raw_noise_3d(dpos.x,
-                                                    dpos.y,
-                                                    dpos.z));
-    //cout << "h: " << (h - radius_) << endl;
-    return h;
+    return radius_ + 20000.f * raw_noise_3d(dpos.x, dpos.y, dpos.z);
 }
 
 glit::Mesh*
@@ -339,17 +342,17 @@ glit::Terrain::reshapeN(size_t level, Facet& self,
         return deleteChildren(self);
 
     // Cull distant faces.
-    dvec3 center = (self.verts[0]->vertex.position +
-                    self.verts[1]->vertex.position +
-                    self.verts[2]->vertex.position) / 3.0;
-    dvec3 to = center - viewPosition;
-    double dist2 = to.x * to.x + to.y * to.y + to.z * to.z;
+    vec3 center = (self.verts[0]->vertex.position +
+                   self.verts[1]->vertex.position +
+                   self.verts[2]->vertex.position) / 3.f;
+    vec3 to = center - vec3(viewPosition);
+    float dist2 = to.x * to.x + to.y * to.y + to.z * to.z;
     if ((EdgeLengths[level] * EdgeLengths[level] * (10.f * 10.f)) < dist2) {
         return deleteChildren(self);
     }
 
     // Cull back facing facets.
-    double cosOfAng = dot(vec3(normalize(viewPosition)), self.normal);
+    float cosOfAng = dot(normalize(vec3(viewPosition)), self.normal);
     if (cosOfAng < 0)
         return deleteChildren(self);
 
@@ -393,8 +396,8 @@ glit::Terrain::Facet::GPUVertex::fromCPU(const CPUVertex& v,
                                          const Facet& owner,
                                          const dvec3& viewPosition)
 {
-    dvec3 actual = (v.position - viewPosition) / CameraScale;
-    return GPUVertex{vec3(actual), owner.normal};
+    vec3 actual = (v.position - vec3(viewPosition)) / CameraScale;
+    return GPUVertex{actual, owner.normal};
 }
 
 /* static */ uint32_t

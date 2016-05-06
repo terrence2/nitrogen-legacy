@@ -236,7 +236,7 @@ do_main()
 void
 do_loop()
 {
-    //glit::util::Timer t("frame");
+    glit::util::Timer t("frame");
 
     static double lastFrameTime = 0.0;
     double now = glfwGetTime();
