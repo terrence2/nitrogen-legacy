@@ -69,10 +69,20 @@ glit::Window::init(InputBindings& inputs)
     // Tie into error handling.
     glfwSetErrorCallback(errorCallback);
 
-    // Ensure we get a webgl compatible context.
+#if defined(__MACOSX__)
+    // MacOS does not support ES contexts at all, so we use desktop GL
+    // 4.1 with the GL_ARB_ES2_compatibility extension.
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#else
+    // Emscripten requires an ES 2.0 context.
+    // Linux works well enough in this configuration as well.
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+#endif
 
     // Use "windowed fullscreen" by getting the current settings.
     GLFWmonitor* monitor = nullptr;
